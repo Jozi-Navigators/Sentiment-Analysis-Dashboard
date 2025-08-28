@@ -1,2154 +1,1252 @@
 
-        // Global variables
-        let currentMode = 'single';
-        let batchTexts = [];
-        let batchResults = [];
-        let currentKeywordView = 'impact';
-        let keywordAnalysisData = {};
-        let currentAnalysisResult = null;
+// Enhanced sentiment analysis data
+const positiveWords = ['excellent', 'amazing', 'great', 'wonderful', 'fantastic', 'love', 'perfect', 'awesome', 'outstanding', 'brilliant', 'superb', 'incredible', 'marvelous', 'exceptional', 'delighted', 'satisfied', 'happy', 'pleased', 'good', 'nice', 'beautiful', 'helpful', 'friendly', 'professional', 'quality', 'recommend', 'impressed', 'smooth', 'easy', 'fast', 'reliable', 'best', 'enjoy', 'excited', 'thrilled', 'grateful', 'appreciate', 'success', 'win', 'victory', 'joy', 'cheerful', 'positive', 'optimistic', 'comfortable', 'convenient', 'effective', 'efficient', 'valuable', 'worth', 'benefit'];
 
-        // Advanced multi-class sentiment analysis data
-        const sentimentWords = {
-            positive: {
-                strong: ['amazing', 'excellent', 'fantastic', 'outstanding', 'brilliant', 'superb', 'incredible', 'marvelous', 'exceptional', 'perfect', 'wonderful', 'awesome', 'phenomenal', 'spectacular', 'magnificent'],
-                moderate: ['great', 'good', 'nice', 'pleasant', 'satisfying', 'enjoyable', 'impressive', 'solid', 'decent', 'fine', 'okay', 'acceptable'],
-                mild: ['like', 'appreciate', 'enjoy', 'pleased', 'happy', 'satisfied', 'content', 'glad', 'comfortable', 'positive', 'optimistic']
-            },
-            negative: {
-                strong: ['terrible', 'awful', 'horrible', 'disgusting', 'atrocious', 'appalling', 'dreadful', 'abysmal', 'catastrophic', 'disastrous', 'hate', 'despise', 'loathe'],
-                moderate: ['bad', 'poor', 'disappointing', 'unsatisfactory', 'inadequate', 'subpar', 'mediocre', 'inferior', 'deficient', 'lacking'],
-                mild: ['annoying', 'frustrating', 'concerning', 'problematic', 'unfortunate', 'sad', 'upset', 'dissatisfied', 'unhappy', 'worried', 'confused']
-            },
-            neutral: {
-                factual: ['is', 'was', 'has', 'have', 'will', 'would', 'could', 'should', 'might', 'may', 'can', 'do', 'does', 'did'],
-                descriptive: ['product', 'service', 'company', 'item', 'feature', 'function', 'design', 'color', 'size', 'price', 'cost', 'delivery', 'shipping'],
-                transitional: ['however', 'although', 'but', 'yet', 'still', 'nevertheless', 'nonetheless', 'meanwhile', 'furthermore', 'moreover']
+const negativeWords = ['terrible', 'awful', 'horrible', 'bad', 'worst', 'hate', 'disappointing', 'poor', 'useless', 'broken', 'slow', 'expensive', 'overpriced', 'rude', 'unprofessional', 'difficult', 'complicated', 'confusing', 'frustrating', 'annoying', 'waste', 'regret', 'problem', 'issue', 'error', 'bug', 'crash', 'fail', 'wrong', 'missing', 'sad', 'angry', 'upset', 'worried', 'concerned', 'disappointed', 'dissatisfied', 'unhappy', 'uncomfortable', 'inconvenient', 'ineffective', 'useless', 'worthless', 'damage', 'loss', 'defeat', 'failure', 'reject', 'deny'];
+
+const neutralWords = ['okay', 'ok', 'fine', 'average', 'normal', 'standard', 'typical', 'usual', 'regular', 'ordinary', 'common', 'basic', 'simple', 'plain', 'adequate', 'sufficient', 'acceptable', 'reasonable', 'fair', 'moderate'];
+
+let sentimentChart = null;
+let intensityChart = null;
+let wordFrequencyChart = null;
+let batchSentimentChart = null;
+let batchResults = [];
+let currentMode = 'single';
+
+function switchMode(mode) {
+    currentMode = mode;
+    const singleMode = document.getElementById('singleMode');
+    const batchMode = document.getElementById('batchMode');
+    const singleBtn = document.getElementById('singleModeBtn');
+    const batchBtn = document.getElementById('batchModeBtn');
+    const resultsSection = document.getElementById('resultsSection');
+    const batchResultsSection = document.getElementById('batchResultsSection');
+
+    if (mode === 'single') {
+        singleMode.classList.remove('hidden');
+        batchMode.classList.add('hidden');
+        singleBtn.classList.add('bg-gradient-to-r', 'from-purple-500', 'to-pink-500');
+        singleBtn.classList.remove('text-white/70');
+        batchBtn.classList.remove('bg-gradient-to-r', 'from-purple-500', 'to-pink-500');
+        batchBtn.classList.add('text-white/70');
+        batchResultsSection.classList.add('hidden');
+    } else {
+        singleMode.classList.add('hidden');
+        batchMode.classList.remove('hidden');
+        batchBtn.classList.add('bg-gradient-to-r', 'from-purple-500', 'to-pink-500');
+        batchBtn.classList.remove('text-white/70');
+        singleBtn.classList.remove('bg-gradient-to-r', 'from-purple-500', 'to-pink-500');
+        singleBtn.classList.add('text-white/70');
+        resultsSection.classList.add('hidden');
+    }
+}
+
+function analyzeSentiment() {
+    const text = document.getElementById('textInput').value.trim();
+    if (!text) {
+        alert('Please enter some text to analyze!');
+        return;
+    }
+
+    const analysis = performSentimentAnalysis(text);
+    displayResults(analysis, text);
+}
+
+function performSentimentAnalysis(text) {
+    const words = text.toLowerCase().match(/\b\w+\b/g) || [];
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+
+    let positiveScore = 0;
+    let negativeScore = 0;
+    let neutralScore = 0;
+    let foundPositiveWords = [];
+    let foundNegativeWords = [];
+    let foundNeutralWords = [];
+
+    // Analyze each word for sentiment
+    words.forEach(word => {
+        if (positiveWords.includes(word)) {
+            positiveScore++;
+            if (!foundPositiveWords.includes(word)) {
+                foundPositiveWords.push(word);
             }
-        };
-
-        // Sentiment modifiers that affect intensity
-        const sentimentModifiers = {
-            intensifiers: ['very', 'extremely', 'incredibly', 'absolutely', 'completely', 'totally', 'really', 'quite', 'highly', 'exceptionally'],
-            diminishers: ['somewhat', 'rather', 'fairly', 'slightly', 'moderately', 'reasonably', 'pretty', 'kind of', 'sort of'],
-            negators: ['not', 'no', 'never', 'nothing', 'nobody', 'nowhere', 'neither', 'nor', 'hardly', 'barely', 'scarcely']
-        };
-
-        const templates = {
-            review: "This product exceeded my expectations! The quality is amazing and delivery was super fast. However, the packaging could be improved. Overall, I'm very satisfied with my purchase and would definitely recommend it to others. The customer service team was also incredibly helpful when I had questions.",
-            social: "Just had the most incredible experience at the new restaurant downtown! 🍕 The food was absolutely delicious and the staff were so friendly. Can't wait to go back! #foodie #restaurant #amazing However, it was quite crowded and we had to wait a bit for our table.",
-            feedback: "I really appreciate the flexible work environment and supportive team culture. The management is understanding and the projects are challenging in a good way. However, I think we could improve our communication processes and maybe have more team building activities. Overall, I'm happy to be part of this organization."
-        };
-
-        // Batch sample datasets
-        const batchSamples = {
-            reviews: [
-                "This product is absolutely amazing! The quality exceeded my expectations and shipping was incredibly fast. Highly recommend!",
-                "Terrible experience. The item arrived damaged and customer service was completely unhelpful. Very disappointed.",
-                "Good product overall. Works as expected, though the price could be better. Decent quality for the money.",
-                "Outstanding service! The team went above and beyond to help me. The product is fantastic and arrived perfectly packaged.",
-                "Not what I expected. The description was misleading and the product feels cheap. Wouldn't buy again."
-            ],
-            social: [
-                "Just had the best coffee ever at the new café downtown! ☕ The atmosphere is perfect and staff are so friendly! #coffee #love",
-                "Ugh, stuck in traffic again 😤 This commute is getting worse every day. Need to find a better route or work from home more.",
-                "Beautiful sunset tonight 🌅 Sometimes you just need to stop and appreciate the simple things in life. Feeling grateful.",
-                "Movie night with friends was epic! 🎬 We laughed so hard. Nothing beats good company and great entertainment.",
-                "Disappointed with the new restaurant. Food was cold and service was slow. Expected much better based on the reviews.",
-                "Excited about the weekend plans! Going hiking with the family. Can't wait to disconnect and enjoy nature 🏔️"
-            ],
-            feedback: [
-                "I love working here! The team is supportive, management is understanding, and the work-life balance is excellent. Great company culture.",
-                "The workload has been overwhelming lately. We need better resource allocation and clearer priorities. Feeling stressed and burned out.",
-                "Good workplace overall. The benefits are decent and colleagues are helpful. Some processes could be more efficient though.",
-                "Management needs improvement. Communication is poor and decisions seem arbitrary. The work itself is interesting but leadership is lacking."
-            ]
-        };
-
-        // Mode switching
-        function switchMode(mode) {
-            currentMode = mode;
-            const singleBtn = document.getElementById('singleModeBtn');
-            const batchBtn = document.getElementById('batchModeBtn');
-            const singleSection = document.getElementById('singleAnalysisSection');
-            const batchSection = document.getElementById('batchProcessingSection');
-            const resultsSection = document.getElementById('resultsSection');
-
-            if (mode === 'single') {
-                singleBtn.className = 'px-6 py-3 bg-blue-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2';
-                batchBtn.className = 'px-6 py-3 bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors hover:bg-gray-400 flex items-center gap-2';
-                singleSection.classList.remove('hidden');
-                batchSection.classList.add('hidden');
-                // Keep results section visible if there are results
-            } else {
-                batchBtn.className = 'px-6 py-3 bg-blue-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2';
-                singleBtn.className = 'px-6 py-3 bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors hover:bg-gray-400 flex items-center gap-2';
-                singleSection.classList.add('hidden');
-                batchSection.classList.remove('hidden');
-                resultsSection.classList.add('hidden');
+        } else if (negativeWords.includes(word)) {
+            negativeScore++;
+            if (!foundNegativeWords.includes(word)) {
+                foundNegativeWords.push(word);
+            }
+        } else if (neutralWords.includes(word)) {
+            neutralScore++;
+            if (!foundNeutralWords.includes(word)) {
+                foundNeutralWords.push(word);
             }
         }
+    });
 
-        // Batch processing functions
-        function addBatchTexts() {
-            const input = document.getElementById('batchTextInput');
-            const text = input.value.trim();
-            
-            if (!text) {
-                alert('Please enter some text to add to the batch!');
-                return;
-            }
+    // If no sentiment words found, consider it neutral based on sentence count
+    if (positiveScore === 0 && negativeScore === 0 && neutralScore === 0) {
+        neutralScore = sentences.length;
+    }
 
-            // Split by double newlines or single newlines if no double newlines found
-            let texts = text.split(/\n\s*\n/).filter(t => t.trim().length > 0);
-            if (texts.length === 1) {
-                texts = text.split('\n').filter(t => t.trim().length > 0);
-            }
+    // Determine overall sentiment with improved logic
+    let overallSentiment;
+    let sentimentColor;
+    let sentimentEmoji;
+    let confidence;
 
-            texts.forEach(t => {
-                const trimmed = t.trim();
-                if (trimmed.length > 10) { // Minimum length check
-                    batchTexts.push({
-                        id: Date.now() + Math.random(),
-                        text: trimmed,
-                        source: 'manual'
-                    });
-                }
-            });
+    const totalSentimentWords = positiveScore + negativeScore + neutralScore;
+    const positivePct = totalSentimentWords > 0 ? (positiveScore / totalSentimentWords) * 100 : 0;
+    const negativePct = totalSentimentWords > 0 ? (negativeScore / totalSentimentWords) * 100 : 0;
+    const neutralPct = totalSentimentWords > 0 ? (neutralScore / totalSentimentWords) * 100 : 100;
 
-            input.value = '';
-            updateBatchQueue();
+    // More nuanced sentiment determination
+    if (positiveScore > negativeScore && positiveScore > neutralScore) {
+        overallSentiment = 'Positive';
+        sentimentColor = 'text-green-600 bg-green-100';
+        sentimentEmoji = '😊';
+        confidence = Math.round(positivePct);
+    } else if (negativeScore > positiveScore && negativeScore > neutralScore) {
+        overallSentiment = 'Negative';
+        sentimentColor = 'text-red-600 bg-red-100';
+        sentimentEmoji = '😞';
+        confidence = Math.round(negativePct);
+    } else if (neutralScore >= positiveScore && neutralScore >= negativeScore) {
+        overallSentiment = 'Neutral';
+        sentimentColor = 'text-gray-600 bg-gray-100';
+        sentimentEmoji = '😐';
+        confidence = Math.round(neutralPct);
+    } else {
+        // Mixed sentiment - close scores
+        const diff = Math.abs(positiveScore - negativeScore);
+        if (diff <= 1) {
+            overallSentiment = 'Mixed';
+            sentimentColor = 'text-yellow-600 bg-yellow-100';
+            sentimentEmoji = '🤔';
+            confidence = 50;
+        } else if (positiveScore > negativeScore) {
+            overallSentiment = 'Positive';
+            sentimentColor = 'text-green-600 bg-green-100';
+            sentimentEmoji = '😊';
+            confidence = Math.round(positivePct);
+        } else {
+            overallSentiment = 'Negative';
+            sentimentColor = 'text-red-600 bg-red-100';
+            sentimentEmoji = '😞';
+            confidence = Math.round(negativePct);
         }
+    }
 
-        function handleBatchFileUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                let content = e.target.result;
-                let texts = [];
-
-                try {
-                    if (file.name.endsWith('.json')) {
-                        const jsonData = JSON.parse(content);
-                        if (Array.isArray(jsonData)) {
-                            texts = jsonData.map(item => {
-                                if (typeof item === 'string') return item;
-                                return item.text || item.content || item.message || JSON.stringify(item);
-                            });
-                        } else if (jsonData.texts) {
-                            texts = jsonData.texts;
-                        } else {
-                            texts = [JSON.stringify(jsonData, null, 2)];
-                        }
-                    } else if (file.name.endsWith('.csv')) {
-                        const lines = content.split('\n');
-                        // Try to detect if first line is header
-                        const hasHeader = lines[0] && (lines[0].toLowerCase().includes('text') || lines[0].toLowerCase().includes('content'));
-                        const startIndex = hasHeader ? 1 : 0;
-                        
-                        texts = lines.slice(startIndex).map(line => {
-                            const columns = line.split(',');
-                            // Take the longest column as it's likely the text content
-                            return columns.reduce((longest, current) => 
-                                current.length > longest.length ? current : longest, '');
-                        }).filter(text => text.trim().length > 10);
-                    } else {
-                        // Plain text file
-                        texts = content.split(/\n\s*\n/).filter(t => t.trim().length > 10);
-                        if (texts.length === 1) {
-                            texts = content.split('\n').filter(t => t.trim().length > 10);
-                        }
-                    }
-
-                    texts.forEach(text => {
-                        const trimmed = text.trim().replace(/^["']|["']$/g, ''); // Remove quotes
-                        if (trimmed.length > 10) {
-                            batchTexts.push({
-                                id: Date.now() + Math.random(),
-                                text: trimmed,
-                                source: file.name
-                            });
-                        }
-                    });
-
-                    updateBatchQueue();
-                    alert(`Successfully loaded ${texts.length} texts from ${file.name}`);
-                } catch (error) {
-                    alert('Error processing file. Please check the format and try again.');
-                }
-            };
-
-            reader.readAsText(file);
+    return {
+        overall: overallSentiment,
+        color: sentimentColor,
+        emoji: sentimentEmoji,
+        confidence: confidence,
+        scores: {
+            positive: positiveScore,
+            negative: negativeScore,
+            neutral: neutralScore
+        },
+        percentages: {
+            positive: Math.round(positivePct),
+            negative: Math.round(negativePct),
+            neutral: Math.round(neutralPct)
+        },
+        words: {
+            positive: foundPositiveWords,
+            negative: foundNegativeWords,
+            neutral: foundNeutralWords
+        },
+        metrics: {
+            totalWords: words.length,
+            sentences: sentences.length,
+            avgWordsPerSentence: Math.round(words.length / sentences.length) || 0,
+            sentimentWords: totalSentimentWords
         }
+    };
+}
 
-        function loadBatchSample(type) {
-            const samples = batchSamples[type];
-            samples.forEach(text => {
-                batchTexts.push({
-                    id: Date.now() + Math.random(),
-                    text: text,
-                    source: `${type} sample`
-                });
-            });
-            updateBatchQueue();
-        }
+function displayResults(analysis, originalText) {
+    document.getElementById('resultsSection').classList.remove('hidden');
 
-        function updateBatchQueue() {
-            const queue = document.getElementById('batchQueue');
-            const processBtn = document.getElementById('processBatchBtn');
-            
-            if (batchTexts.length === 0) {
-                queue.innerHTML = `
-                    <div class="text-center text-gray-500 py-8">
-                        <div class="text-4xl mb-2">📝</div>
-                        <p>No texts in batch queue</p>
-                        <p class="text-sm">Add texts to start batch processing</p>
+    // Overall sentiment
+    const overallDiv = document.getElementById('overallSentiment');
+    overallDiv.innerHTML = `
+                <div class="text-center relative">
+                    <div class="text-8xl mb-4 emoji-bounce">${analysis.emoji}</div>
+                    <div class="text-4xl font-bold text-white mb-4 neon-text">
+                        ${analysis.overall} Vibes Detected!
                     </div>
-                `;
-                processBtn.disabled = true;
-                return;
-            }
-
-            processBtn.disabled = false;
-            queue.innerHTML = batchTexts.map((item, index) => `
-                <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border">
-                    <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
-                        ${index + 1}
+                    <div class="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md px-8 py-4 rounded-2xl border border-white/30 inline-block">
+                        <div class="text-white/90 text-lg">Magic Confidence Level</div>
+                        <div class="text-3xl font-bold text-white neon-text">${analysis.confidence}%</div>
                     </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm text-gray-800 truncate">${item.text}</p>
-                        <p class="text-xs text-gray-500 mt-1">Source: ${item.source}</p>
-                    </div>
-                    <button onclick="removeBatchText('${item.id}')" 
-                        class="flex-shrink-0 text-red-500 hover:text-red-700 text-sm">
-                        ✕
-                    </button>
-                </div>
-            `).join('');
-        }
-
-        function removeBatchText(id) {
-            batchTexts = batchTexts.filter(item => item.id !== id);
-            updateBatchQueue();
-        }
-
-        function clearBatch() {
-            batchTexts = [];
-            batchResults = [];
-            updateBatchQueue();
-            document.getElementById('batchResults').classList.add('hidden');
-        }
-
-        async function processBatch() {
-            if (batchTexts.length === 0) return;
-
-            const progressContainer = document.getElementById('batchProgress');
-            const progressBar = document.getElementById('progressBar');
-            const progressText = document.getElementById('progressText');
-            const processBtn = document.getElementById('processBatchBtn');
-
-            // Show progress
-            progressContainer.classList.remove('hidden');
-            processBtn.disabled = true;
-            processBtn.innerHTML = '⏳ Processing...';
-
-            batchResults = [];
-            
-            for (let i = 0; i < batchTexts.length; i++) {
-                const item = batchTexts[i];
-                
-                // Update progress
-                const progress = ((i + 1) / batchTexts.length) * 100;
-                progressBar.style.width = `${progress}%`;
-                progressText.textContent = `${i + 1} / ${batchTexts.length}`;
-
-                // Analyze text
-                const result = performSentimentAnalysis(item.text);
-                batchResults.push({
-                    ...item,
-                    ...result,
-                    index: i
-                });
-
-                // Small delay to show progress
-                await new Promise(resolve => setTimeout(resolve, 300));
-            }
-
-            // Hide progress and show results
-            progressContainer.classList.add('hidden');
-            processBtn.disabled = false;
-            processBtn.innerHTML = '🚀 Process Batch';
-            
-            displayBatchResults();
-        }
-
-        function displayBatchResults() {
-            document.getElementById('batchResults').classList.remove('hidden');
-            
-            // Calculate aggregate statistics
-            const totalTexts = batchResults.length;
-            const avgPositive = Math.round(batchResults.reduce((sum, r) => sum + r.positivePercent, 0) / totalTexts);
-            const avgNegative = Math.round(batchResults.reduce((sum, r) => sum + r.negativePercent, 0) / totalTexts);
-            const avgConfidence = Math.round(batchResults.reduce((sum, r) => sum + r.confidence, 0) / totalTexts);
-
-            // Update overview stats
-            document.getElementById('totalProcessed').textContent = totalTexts;
-            document.getElementById('avgPositive').textContent = `${avgPositive}%`;
-            document.getElementById('avgNegative').textContent = `${avgNegative}%`;
-            document.getElementById('avgConfidence').textContent = `${avgConfidence}%`;
-
-            // Update charts
-            updateBatchCharts();
-            
-            // Update insights
-            updateBatchInsights();
-            
-            // Update individual results
-            updateBatchResultsList();
-
-            // Scroll to results
-            document.getElementById('batchResults').scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function updateBatchCharts() {
-            // Sentiment distribution chart
-            const sentimentCtx = document.getElementById('batchSentimentChart').getContext('2d');
-            if (window.batchSentimentChart) window.batchSentimentChart.destroy();
-
-            const avgPositive = batchResults.reduce((sum, r) => sum + r.positivePercent, 0) / batchResults.length;
-            const avgNeutral = batchResults.reduce((sum, r) => sum + r.neutralPercent, 0) / batchResults.length;
-            const avgNegative = batchResults.reduce((sum, r) => sum + r.negativePercent, 0) / batchResults.length;
-
-            window.batchSentimentChart = new Chart(sentimentCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Positive', 'Neutral', 'Negative'],
-                    datasets: [{
-                        data: [avgPositive, avgNeutral, avgNegative],
-                        backgroundColor: ['#10B981', '#6B7280', '#EF4444'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { padding: 20, usePointStyle: true }
-                        }
-                    }
-                }
-            });
-
-            // Confidence distribution chart
-            const confidenceCtx = document.getElementById('batchConfidenceChart').getContext('2d');
-            if (window.batchConfidenceChart) window.batchConfidenceChart.destroy();
-
-            // Group confidence scores into ranges
-            const confidenceRanges = { 'High (80-100%)': 0, 'Medium (60-79%)': 0, 'Low (40-59%)': 0, 'Very Low (0-39%)': 0 };
-            batchResults.forEach(result => {
-                if (result.confidence >= 80) confidenceRanges['High (80-100%)']++;
-                else if (result.confidence >= 60) confidenceRanges['Medium (60-79%)']++;
-                else if (result.confidence >= 40) confidenceRanges['Low (40-59%)']++;
-                else confidenceRanges['Very Low (0-39%)']++;
-            });
-
-            window.batchConfidenceChart = new Chart(confidenceCtx, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(confidenceRanges),
-                    datasets: [{
-                        label: 'Number of Texts',
-                        data: Object.values(confidenceRanges),
-                        backgroundColor: ['#10B981', '#F59E0B', '#EF4444', '#6B7280'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { stepSize: 1 }
-                        }
-                    }
-                }
-            });
-        }
-
-        function updateBatchInsights() {
-            const insights = document.getElementById('batchInsights');
-            
-            // Calculate insights
-            const totalTexts = batchResults.length;
-            const positiveTexts = batchResults.filter(r => r.overallSentiment.includes('Positive')).length;
-            const negativeTexts = batchResults.filter(r => r.overallSentiment.includes('Negative')).length;
-            const neutralTexts = totalTexts - positiveTexts - negativeTexts;
-            
-            const highConfidenceTexts = batchResults.filter(r => r.confidence >= 80).length;
-            const avgWordCount = Math.round(batchResults.reduce((sum, r) => sum + r.wordCount, 0) / totalTexts);
-            
-            const mostPositive = batchResults.reduce((max, r) => r.positivePercent > max.positivePercent ? r : max);
-            const mostNegative = batchResults.reduce((max, r) => r.negativePercent > max.negativePercent ? r : max);
-
-            insights.innerHTML = `
-                <div class="space-y-4">
-                    <div class="p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400">
-                        <h4 class="font-medium text-blue-800 mb-2">📊 Overall Distribution</h4>
-                        <p class="text-sm text-blue-700">
-                            ${positiveTexts} positive (${Math.round(positiveTexts/totalTexts*100)}%), 
-                            ${neutralTexts} neutral (${Math.round(neutralTexts/totalTexts*100)}%), 
-                            ${negativeTexts} negative (${Math.round(negativeTexts/totalTexts*100)}%) texts analyzed
-                        </p>
-                    </div>
-                    
-                    <div class="p-4 bg-green-50 rounded-lg border-l-4 border-green-400">
-                        <h4 class="font-medium text-green-800 mb-2">🎯 Quality Metrics</h4>
-                        <p class="text-sm text-green-700">
-                            ${highConfidenceTexts} texts (${Math.round(highConfidenceTexts/totalTexts*100)}%) have high confidence scores (≥80%). 
-                            Average text length: ${avgWordCount} words.
-                        </p>
-                    </div>
-                </div>
-                
-                <div class="space-y-4">
-                    <div class="p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-400">
-                        <h4 class="font-medium text-yellow-800 mb-2">⭐ Most Positive</h4>
-                        <p class="text-sm text-yellow-700 mb-2">${mostPositive.positivePercent}% positive sentiment</p>
-                        <p class="text-xs text-yellow-600 italic">"${mostPositive.text.substring(0, 100)}..."</p>
-                    </div>
-                    
-                    <div class="p-4 bg-red-50 rounded-lg border-l-4 border-red-400">
-                        <h4 class="font-medium text-red-800 mb-2">⚠️ Most Critical</h4>
-                        <p class="text-sm text-red-700 mb-2">${mostNegative.negativePercent}% negative sentiment</p>
-                        <p class="text-xs text-red-600 italic">"${mostNegative.text.substring(0, 100)}..."</p>
-                    </div>
+                    <div class="absolute -top-4 -left-4 text-3xl animate-spin">✨</div>
+                    <div class="absolute -top-4 -right-4 text-3xl animate-bounce">🌟</div>
+                    <div class="absolute -bottom-4 -left-4 text-3xl animate-pulse">💫</div>
+                    <div class="absolute -bottom-4 -right-4 text-3xl animate-ping">⭐</div>
                 </div>
             `;
-        }
 
-        function updateBatchResultsList() {
-            const container = document.getElementById('batchResultsList');
-            
-            container.innerHTML = batchResults.map((result, index) => {
-                const sentimentColor = result.overallSentiment.includes('Positive') ? 'text-green-600' : 
-                                     result.overallSentiment.includes('Negative') ? 'text-red-600' : 'text-gray-600';
-                const bgColor = result.overallSentiment.includes('Positive') ? 'bg-green-50 border-green-200' : 
-                               result.overallSentiment.includes('Negative') ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
+    // Create/update charts
+    createSentimentChart(analysis.scores, analysis.percentages);
+    createIntensityChart(analysis.scores);
+    createWordFrequencyChart(analysis.words);
 
-                return `
-                    <div class="border rounded-lg p-4 ${bgColor}">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="flex items-center gap-3">
-                                <span class="text-2xl">${result.sentimentEmoji}</span>
-                                <div>
-                                    <h4 class="font-medium ${sentimentColor}">${result.overallSentiment}</h4>
-                                    <p class="text-sm text-gray-600">Confidence: ${result.confidence}% • ${result.wordCount} words</p>
-                                </div>
-                            </div>
-                            <div class="text-right text-sm">
-                                <div class="text-green-600">+${result.positivePercent}%</div>
-                                <div class="text-gray-600">=${result.neutralPercent}%</div>
-                                <div class="text-red-600">-${result.negativePercent}%</div>
-                            </div>
-                        </div>
-                        
-                        <p class="text-gray-800 text-sm mb-3">${result.text}</p>
-                        
-                        <div class="flex items-center justify-between text-xs text-gray-500">
-                            <span>Source: ${result.source}</span>
-                            <span>Intensity: ${result.intensity}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
+    // Generate explanations
+    generateChartExplanations(analysis);
 
-        function sortBatchResults() {
-            const sortBy = document.getElementById('sortBy').value;
-            
-            switch (sortBy) {
-                case 'confidence':
-                    batchResults.sort((a, b) => b.confidence - a.confidence);
-                    break;
-                case 'positive':
-                    batchResults.sort((a, b) => b.positivePercent - a.positivePercent);
-                    break;
-                case 'negative':
-                    batchResults.sort((a, b) => b.negativePercent - a.negativePercent);
-                    break;
-                case 'length':
-                    batchResults.sort((a, b) => b.wordCount - a.wordCount);
-                    break;
-                default: // index
-                    batchResults.sort((a, b) => a.index - b.index);
-            }
-            
-            updateBatchResultsList();
-        }
 
-        function exportBatchResults() {
-            const csvContent = [
-                ['Index', 'Text', 'Overall Sentiment', 'Confidence', 'Positive %', 'Neutral %', 'Negative %', 'Word Count', 'Intensity', 'Source'].join(','),
-                ...batchResults.map(result => [
-                    result.index + 1,
-                    `"${result.text.replace(/"/g, '""')}"`,
-                    result.overallSentiment,
-                    result.confidence,
-                    result.positivePercent,
-                    result.neutralPercent,
-                    result.negativePercent,
-                    result.wordCount,
-                    result.intensity,
-                    result.source
-                ].join(','))
-            ].join('\n');
 
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `sentiment_analysis_batch_${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }
+    // Word analysis
+    const positiveWordsDiv = document.getElementById('positiveWords');
+    positiveWordsDiv.innerHTML = analysis.words.positive.length > 0 ?
+        analysis.words.positive.map(word =>
+            `<span class="word-tag bg-gradient-to-r from-green-400/20 to-emerald-400/20 text-green-300 px-4 py-2 rounded-full text-sm font-medium border border-green-400/30 backdrop-blur-sm">${word}</span>`
+        ).join('') :
+        '<span class="text-white/60 italic">No happy words found in this spell</span>';
 
-        // Single analysis functions (keeping existing functionality)
-        function loadTemplate(type) {
-            document.getElementById('textInput').value = templates[type];
-        }
+    const negativeWordsDiv = document.getElementById('negativeWords');
+    negativeWordsDiv.innerHTML = analysis.words.negative.length > 0 ?
+        analysis.words.negative.map(word =>
+            `<span class="word-tag bg-gradient-to-r from-red-400/20 to-pink-400/20 text-red-300 px-4 py-2 rounded-full text-sm font-medium border border-red-400/30 backdrop-blur-sm">${word}</span>`
+        ).join('') :
+        '<span class="text-white/60 italic">No grumpy words found in this spell</span>';
 
-        function loadSample() {
-            loadTemplate('review');
-        }
+    const neutralWordsDiv = document.getElementById('neutralWords');
+    neutralWordsDiv.innerHTML = analysis.words.neutral.length > 0 ?
+        analysis.words.neutral.map(word =>
+            `<span class="word-tag bg-gradient-to-r from-gray-400/20 to-slate-400/20 text-gray-300 px-4 py-2 rounded-full text-sm font-medium border border-gray-400/30 backdrop-blur-sm">${word}</span>`
+        ).join('') :
+        '<span class="text-white/60 italic">No chill words found in this spell</span>';
+}
 
-        function clearAll() {
-            document.getElementById('textInput').value = '';
-            document.getElementById('fileInput').value = '';
-            document.getElementById('fileInfo').classList.add('hidden');
-            document.getElementById('resultsSection').classList.add('hidden');
-            document.getElementById('exportOptions').classList.add('hidden');
-            currentAnalysisResult = null;
-        }
+function createSentimentChart(scores, percentages) {
+    const ctx = document.getElementById('sentimentChart').getContext('2d');
 
-        // Export Functions
-        function exportResults(format) {
-            if (!currentAnalysisResult) {
-                alert('No analysis results to export. Please analyze some text first.');
-                return;
-            }
+    if (sentimentChart) {
+        sentimentChart.destroy();
+    }
 
-            const timestamp = new Date().toISOString().split('T')[0];
-            const originalText = document.getElementById('textInput').value;
-            
-            switch (format) {
-                case 'csv':
-                    exportToCSV(currentAnalysisResult, originalText, timestamp);
-                    break;
-                case 'json':
-                    exportToJSON(currentAnalysisResult, originalText, timestamp);
-                    break;
-                case 'pdf':
-                    exportToPDF(currentAnalysisResult, originalText, timestamp);
-                    break;
-                default:
-                    alert('Unsupported export format');
-            }
-        }
-
-        function exportToCSV(data, originalText, timestamp) {
-            const csvRows = [
-                ['Metric', 'Value', 'Description'],
-                ['Analysis Date', timestamp, 'Date of sentiment analysis'],
-                ['Text Length', data.wordCount + ' words', 'Number of words analyzed'],
-                ['Sentences', data.sentenceCount, 'Number of sentences'],
-                ['Overall Sentiment', data.overallSentiment, 'Primary sentiment classification'],
-                ['Sentiment Score', data.avgSentiment, 'Numerical sentiment score (-1 to +1)'],
-                ['Confidence Level', data.confidence + '%', 'Overall confidence in classification'],
-                ['Positive Percentage', data.positivePercent + '%', 'Percentage of positive sentiment'],
-                ['Neutral Percentage', data.neutralPercent + '%', 'Percentage of neutral sentiment'],
-                ['Negative Percentage', data.negativePercent + '%', 'Percentage of negative sentiment'],
-                ['Emotional Intensity', data.intensity, 'Level of emotional expression'],
-                ['Sentiment Density', data.sentimentDensity + '%', 'Percentage of words with sentiment'],
-                ['Word Coverage', data.wordCoverage + '%', 'Percentage of sentiment words identified'],
-                ['Consistency Score', data.consistencyScore, 'Sentiment consistency across text'],
-                ['Positive Confidence', data.positiveConfidence + '%', 'Confidence in positive classification'],
-                ['Negative Confidence', data.negativeConfidence + '%', 'Confidence in negative classification'],
-                ['Neutral Confidence', data.neutralConfidence + '%', 'Confidence in neutral classification'],
-                ['', '', ''],
-                ['Positive Keywords', data.foundPositiveWords.join(', '), 'Words contributing to positive sentiment'],
-                ['Negative Keywords', data.foundNegativeWords.join(', '), 'Words contributing to negative sentiment'],
-                ['Neutral Keywords', data.foundNeutralWords.slice(0, 10).join(', '), 'Neutral/factual words identified'],
-                ['', '', ''],
-                ['Original Text', '"' + originalText.replace(/"/g, '""') + '"', 'The analyzed text content']
-            ];
-
-            const csvContent = csvRows.map(row => row.join(',')).join('\n');
-            downloadFile(csvContent, `sentiment_analysis_${timestamp}.csv`, 'text/csv');
-        }
-
-        function exportToJSON(data, originalText, timestamp) {
-            const exportData = {
-                metadata: {
-                    analysisDate: timestamp,
-                    analysisTime: new Date().toISOString(),
-                    textLength: data.wordCount,
-                    sentences: data.sentenceCount,
-                    analysisVersion: '2.0'
-                },
-                originalText: originalText,
-                sentimentAnalysis: {
-                    overallSentiment: data.overallSentiment,
-                    sentimentScore: parseFloat(data.avgSentiment),
-                    sentimentMagnitude: data.sentimentMagnitude,
-                    confidence: {
-                        overall: data.confidence,
-                        positive: data.positiveConfidence,
-                        negative: data.negativeConfidence,
-                        neutral: data.neutralConfidence
-                    },
-                    distribution: {
-                        positive: data.positivePercent,
-                        neutral: data.neutralPercent,
-                        negative: data.negativePercent
-                    },
-                    metrics: {
-                        emotionalIntensity: data.intensity,
-                        sentimentDensity: data.sentimentDensity,
-                        wordCoverage: data.wordCoverage,
-                        consistencyScore: parseFloat(data.consistencyScore)
-                    }
-                },
-                keywordAnalysis: {
-                    positiveKeywords: data.foundPositiveWords,
-                    negativeKeywords: data.foundNegativeWords,
-                    neutralKeywords: data.foundNeutralWords.slice(0, 15)
-                },
-                sentenceBreakdown: data.sentences.map((sentence, index) => ({
-                    index: index + 1,
-                    text: sentence.trim(),
-                    length: sentence.trim().split(' ').length
-                })),
-                qualityMetrics: {
-                    textQuality: data.wordCount >= 50 ? 'High' : data.wordCount >= 20 ? 'Medium' : 'Low',
-                    reliabilityScore: Math.min(100, (data.confidence + data.sentimentDensity + (data.consistencyScore * 100)) / 3),
-                    recommendedActions: generateRecommendations(data)
-                }
-            };
-
-            const jsonContent = JSON.stringify(exportData, null, 2);
-            downloadFile(jsonContent, `sentiment_analysis_${timestamp}.json`, 'application/json');
-        }
-
-        function exportToPDF(data, originalText, timestamp) {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            
-            let yPosition = 20;
-            const pageHeight = doc.internal.pageSize.height;
-            const margin = 20;
-            const lineHeight = 7;
-
-            // Helper function to add text with word wrapping
-            function addText(text, x, y, maxWidth = 170, fontSize = 12) {
-                doc.setFontSize(fontSize);
-                const lines = doc.splitTextToSize(text, maxWidth);
-                doc.text(lines, x, y);
-                return y + (lines.length * lineHeight);
-            }
-
-            // Helper function to check if we need a new page
-            function checkNewPage(requiredSpace = 30) {
-                if (yPosition + requiredSpace > pageHeight - margin) {
-                    doc.addPage();
-                    yPosition = 20;
-                }
-            }
-
-            // Title
-            doc.setFontSize(20);
-            doc.setFont(undefined, 'bold');
-            doc.text('Sentiment Analysis Report', margin, yPosition);
-            yPosition += 15;
-
-            // Analysis metadata
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'normal');
-            yPosition = addText(`Analysis Date: ${timestamp}`, margin, yPosition);
-            yPosition = addText(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
-            yPosition += 10;
-
-            // Overall Results Section
-            checkNewPage();
-            doc.setFont(undefined, 'bold');
-            yPosition = addText('OVERALL SENTIMENT ANALYSIS', margin, yPosition, 170, 14);
-            yPosition += 5;
-            
-            doc.setFont(undefined, 'normal');
-            yPosition = addText(`Overall Sentiment: ${data.overallSentiment}`, margin, yPosition);
-            yPosition = addText(`Confidence Level: ${data.confidence}%`, margin, yPosition);
-            yPosition = addText(`Sentiment Score: ${data.avgSentiment} (Range: -1 to +1)`, margin, yPosition);
-            yPosition = addText(`Emotional Intensity: ${data.intensity}`, margin, yPosition);
-            yPosition += 10;
-
-            // Sentiment Distribution
-            checkNewPage();
-            doc.setFont(undefined, 'bold');
-            yPosition = addText('SENTIMENT DISTRIBUTION', margin, yPosition, 170, 14);
-            yPosition += 5;
-            
-            doc.setFont(undefined, 'normal');
-            yPosition = addText(`Positive: ${data.positivePercent}%`, margin, yPosition);
-            yPosition = addText(`Neutral: ${data.neutralPercent}%`, margin, yPosition);
-            yPosition = addText(`Negative: ${data.negativePercent}%`, margin, yPosition);
-            yPosition += 10;
-
-            // Confidence Breakdown
-            checkNewPage();
-            doc.setFont(undefined, 'bold');
-            yPosition = addText('CONFIDENCE BREAKDOWN', margin, yPosition, 170, 14);
-            yPosition += 5;
-            
-            doc.setFont(undefined, 'normal');
-            yPosition = addText(`Positive Classification Confidence: ${data.positiveConfidence}%`, margin, yPosition);
-            yPosition = addText(`Negative Classification Confidence: ${data.negativeConfidence}%`, margin, yPosition);
-            yPosition = addText(`Neutral Classification Confidence: ${data.neutralConfidence}%`, margin, yPosition);
-            yPosition += 10;
-
-            // Quality Metrics
-            checkNewPage();
-            doc.setFont(undefined, 'bold');
-            yPosition = addText('QUALITY METRICS', margin, yPosition, 170, 14);
-            yPosition += 5;
-            
-            doc.setFont(undefined, 'normal');
-            yPosition = addText(`Text Length: ${data.wordCount} words, ${data.sentenceCount} sentences`, margin, yPosition);
-            yPosition = addText(`Sentiment Density: ${data.sentimentDensity}% (emotional words per total words)`, margin, yPosition);
-            yPosition = addText(`Word Coverage: ${data.wordCoverage}% (sentiment words identified)`, margin, yPosition);
-            yPosition = addText(`Consistency Score: ${data.consistencyScore} (sentiment uniformity)`, margin, yPosition);
-            yPosition += 10;
-
-            // Keyword Analysis
-            checkNewPage(50);
-            doc.setFont(undefined, 'bold');
-            yPosition = addText('KEYWORD ANALYSIS', margin, yPosition, 170, 14);
-            yPosition += 5;
-            
-            doc.setFont(undefined, 'normal');
-            if (data.foundPositiveWords.length > 0) {
-                yPosition = addText(`Positive Keywords: ${data.foundPositiveWords.join(', ')}`, margin, yPosition);
-                yPosition += 5;
-            }
-            if (data.foundNegativeWords.length > 0) {
-                yPosition = addText(`Negative Keywords: ${data.foundNegativeWords.join(', ')}`, margin, yPosition);
-                yPosition += 5;
-            }
-            if (data.foundNeutralWords.length > 0) {
-                yPosition = addText(`Key Neutral Terms: ${data.foundNeutralWords.slice(0, 10).join(', ')}`, margin, yPosition);
-                yPosition += 5;
-            }
-            yPosition += 10;
-
-            // Recommendations
-            checkNewPage(40);
-            doc.setFont(undefined, 'bold');
-            yPosition = addText('RECOMMENDATIONS & INSIGHTS', margin, yPosition, 170, 14);
-            yPosition += 5;
-            
-            doc.setFont(undefined, 'normal');
-            const recommendations = generateRecommendations(data);
-            recommendations.forEach(rec => {
-                checkNewPage(15);
-                yPosition = addText(`• ${rec}`, margin, yPosition);
-                yPosition += 3;
-            });
-            yPosition += 10;
-
-            // Original Text
-            checkNewPage(60);
-            doc.setFont(undefined, 'bold');
-            yPosition = addText('ANALYZED TEXT', margin, yPosition, 170, 14);
-            yPosition += 5;
-            
-            doc.setFont(undefined, 'normal');
-            doc.setFontSize(10);
-            const textLines = doc.splitTextToSize(originalText, 170);
-            
-            textLines.forEach(line => {
-                checkNewPage(10);
-                doc.text(line, margin, yPosition);
-                yPosition += 5;
-            });
-
-            // Footer
-            const totalPages = doc.internal.getNumberOfPages();
-            for (let i = 1; i <= totalPages; i++) {
-                doc.setPage(i);
-                doc.setFontSize(8);
-                doc.setFont(undefined, 'normal');
-                doc.text(`Page ${i} of ${totalPages} | Sentiment Analysis Report | Generated ${timestamp}`, 
-                    margin, pageHeight - 10);
-            }
-
-            doc.save(`sentiment_analysis_report_${timestamp}.pdf`);
-        }
-
-        function generateRecommendations(data) {
-            const recommendations = [];
-            
-            if (data.confidence < 70) {
-                recommendations.push('Consider analyzing a longer text sample for more reliable results');
-            }
-            
-            if (data.sentimentDensity < 15) {
-                recommendations.push('Text appears factual/neutral - consider context when interpreting sentiment');
-            }
-            
-            if (data.consistencyScore < 0.6) {
-                recommendations.push('Mixed sentiment detected - analyze individual sections for nuanced insights');
-            }
-            
-            if (data.wordCount < 30) {
-                recommendations.push('Short text sample may limit accuracy - combine with additional content if possible');
-            }
-            
-            if (data.overallSentiment.includes('Positive') && data.negativePercent > 25) {
-                recommendations.push('Despite positive classification, significant negative elements present - review for balanced perspective');
-            }
-            
-            if (data.overallSentiment.includes('Negative') && data.positivePercent > 25) {
-                recommendations.push('Negative sentiment with positive elements suggests constructive feedback rather than pure criticism');
-            }
-            
-            if (data.confidence >= 85 && data.sentimentDensity >= 20) {
-                recommendations.push('High-quality analysis with strong sentiment signals - results are highly reliable');
-            }
-            
-            return recommendations;
-        }
-
-        function downloadFile(content, filename, mimeType) {
-            const blob = new Blob([content], { type: mimeType });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }
-
-        function switchInputMethod(method) {
-            const textSection = document.getElementById('textInputSection');
-            const fileSection = document.getElementById('fileInputSection');
-            const textBtn = document.getElementById('textMethodBtn');
-            const fileBtn = document.getElementById('fileMethodBtn');
-
-            if (method === 'text') {
-                textSection.classList.remove('hidden');
-                fileSection.classList.add('hidden');
-                textBtn.className = 'px-4 py-2 bg-blue-600 text-white rounded-lg font-medium transition-colors';
-                fileBtn.className = 'px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors hover:bg-gray-400';
-            } else {
-                textSection.classList.add('hidden');
-                fileSection.classList.remove('hidden');
-                fileBtn.className = 'px-4 py-2 bg-blue-600 text-white rounded-lg font-medium transition-colors';
-                textBtn.className = 'px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors hover:bg-gray-400';
-            }
-        }
-
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const fileInfo = document.getElementById('fileInfo');
-            const fileName = document.getElementById('fileName');
-            const fileSize = document.getElementById('fileSize');
-
-            fileName.textContent = file.name;
-            fileSize.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
-            fileInfo.classList.remove('hidden');
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                let content = e.target.result;
-                
-                // Handle different file types
-                if (file.name.endsWith('.json')) {
-                    try {
-                        const jsonData = JSON.parse(content);
-                        // Extract text from common JSON structures
-                        if (jsonData.text) content = jsonData.text;
-                        else if (jsonData.content) content = jsonData.content;
-                        else if (jsonData.message) content = jsonData.message;
-                        else if (Array.isArray(jsonData)) {
-                            content = jsonData.map(item => 
-                                item.text || item.content || item.message || JSON.stringify(item)
-                            ).join(' ');
-                        } else {
-                            content = JSON.stringify(jsonData, null, 2);
+    sentimentChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Positive', 'Negative', 'Neutral'],
+            datasets: [{
+                data: [scores.positive, scores.negative, scores.neutral],
+                backgroundColor: ['#10B981', '#EF4444', '#6B7280'],
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        font: {
+                            size: 12
                         }
-                    } catch (error) {
-                        alert('Error parsing JSON file. Please check the file format.');
-                        return;
                     }
-                } else if (file.name.endsWith('.csv')) {
-                    // Simple CSV parsing - extract text from all cells
-                    const lines = content.split('\n');
-                    content = lines.map(line => line.split(',').join(' ')).join(' ');
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const label = context.label || '';
+                            const value = context.parsed;
+                            const percentage = percentages[label.toLowerCase()];
+                            return `${label}: ${value} words (${percentage}%)`;
+                        }
+                    }
                 }
-
-                // Set the content to the text input for processing
-                document.getElementById('textInput').value = content;
-                
-                // Show success message
-                setTimeout(() => {
-                    fileInfo.innerHTML = `
-                        <div class="flex items-center gap-2">
-                            <span class="text-green-600">✅</span>
-                            <span class="font-medium text-green-800">File loaded successfully!</span>
-                            <span class="text-sm text-green-600">${(content.length)} characters</span>
-                        </div>
-                    `;
-                }, 500);
-            };
-
-            reader.onerror = function() {
-                alert('Error reading file. Please try again.');
-            };
-
-            reader.readAsText(file);
+            }
         }
+    });
+}
 
-        // Add drag and drop functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            const fileSection = document.getElementById('fileInputSection');
-            
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                fileSection.addEventListener(eventName, preventDefaults, false);
-            });
+function createIntensityChart(scores) {
+    const ctx = document.getElementById('intensityChart').getContext('2d');
 
-            function preventDefaults(e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
+    if (intensityChart) {
+        intensityChart.destroy();
+    }
 
-            ['dragenter', 'dragover'].forEach(eventName => {
-                fileSection.addEventListener(eventName, highlight, false);
-            });
+    const total = scores.positive + scores.negative + scores.neutral;
+    const intensityData = [
+        (scores.positive / total * 100) || 0,
+        (scores.negative / total * 100) || 0,
+        (scores.neutral / total * 100) || 0
+    ];
 
-            ['dragleave', 'drop'].forEach(eventName => {
-                fileSection.addEventListener(eventName, unhighlight, false);
-            });
-
-            function highlight(e) {
-                fileSection.querySelector('.border-dashed').classList.add('border-blue-400', 'bg-blue-50');
-            }
-
-            function unhighlight(e) {
-                fileSection.querySelector('.border-dashed').classList.remove('border-blue-400', 'bg-blue-50');
-            }
-
-            fileSection.addEventListener('drop', handleDrop, false);
-
-            function handleDrop(e) {
-                const dt = e.dataTransfer;
-                const files = dt.files;
-                
-                if (files.length > 0) {
-                    document.getElementById('fileInput').files = files;
-                    handleFileUpload({ target: { files: files } });
+    intensityChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Positive Intensity', 'Negative Intensity', 'Neutral Intensity'],
+            datasets: [{
+                label: 'Sentiment Intensity (%)',
+                data: intensityData,
+                backgroundColor: ['#10B981', '#EF4444', '#6B7280'],
+                borderColor: ['#059669', '#DC2626', '#4B5563'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function (value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            return `${context.label}: ${context.parsed.y.toFixed(1)}%`;
+                        }
+                    }
                 }
             }
+        }
+    });
+}
+
+function createWordFrequencyChart(words) {
+    const ctx = document.getElementById('wordFrequencyChart').getContext('2d');
+
+    if (wordFrequencyChart) {
+        wordFrequencyChart.destroy();
+    }
+
+    // Count word frequencies
+    const allWords = [...words.positive, ...words.negative, ...words.neutral];
+    const wordCounts = {};
+    allWords.forEach(word => {
+        wordCounts[word] = (wordCounts[word] || 0) + 1;
+    });
+
+    // Get top 8 words
+    const sortedWords = Object.entries(wordCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 8);
+
+    const labels = sortedWords.map(([word]) => word);
+    const data = sortedWords.map(([, count]) => count);
+    const colors = labels.map(word => {
+        if (words.positive.includes(word)) return '#10B981';
+        if (words.negative.includes(word)) return '#EF4444';
+        return '#6B7280';
+    });
+
+    wordFrequencyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Word Frequency',
+                data: data,
+                backgroundColor: colors,
+                borderColor: colors.map(color => color === '#10B981' ? '#059669' : color === '#EF4444' ? '#DC2626' : '#4B5563'),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const sentiment = words.positive.includes(context.label) ? 'Positive' :
+                                words.negative.includes(context.label) ? 'Negative' : 'Neutral';
+                            return `${context.label}: ${context.parsed.x} times (${sentiment})`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+
+
+function generateChartExplanations(analysis) {
+    // Sentiment Distribution Explanation
+    const chartExplanation = document.getElementById('chartExplanation');
+    const dominant = analysis.overall.toLowerCase();
+    const dominantScore = analysis.scores[dominant] || 0;
+    const totalWords = analysis.scores.positive + analysis.scores.negative + analysis.scores.neutral;
+
+    chartExplanation.innerHTML = `
+                <div class="bg-gradient-to-r from-white/10 to-white/5 border-l-4 border-blue-400 p-4 rounded-r-xl backdrop-blur-sm">
+                    <p class="text-white font-medium">🔮 <strong>Oracle's Vision:</strong> Your magical text radiates predominantly <strong class="neon-text">${analysis.overall}</strong> energy with ${dominantScore} ${dominant} power words out of ${totalWords} enchanted words!</p>
+                </div>
+                <div class="text-sm text-white/70 space-y-1">
+                    <p>🟢 Green slice = Happy energy (${analysis.percentages.positive}%)</p>
+                    <p>🔴 Red slice = Grumpy energy (${analysis.percentages.negative}%)</p>
+                    <p>⚪ Gray slice = Chill energy (${analysis.percentages.neutral}%)</p>
+                </div>
+            `;
+
+    // Intensity Analysis Explanation
+    const intensityExplanation = document.getElementById('intensityExplanation');
+    const maxIntensity = Math.max(analysis.percentages.positive, analysis.percentages.negative, analysis.percentages.neutral);
+    const intensityType = analysis.percentages.positive === maxIntensity ? 'positive' :
+        analysis.percentages.negative === maxIntensity ? 'negative' : 'neutral';
+
+    intensityExplanation.innerHTML = `
+                <div class="bg-gradient-to-r from-white/10 to-white/5 border-l-4 border-purple-400 p-4 rounded-r-xl backdrop-blur-sm">
+                    <p class="text-white font-medium">⚡ <strong>Power Reading:</strong> The ${intensityType} energy field shows maximum power at <strong class="neon-text">${maxIntensity}%</strong> - that's some serious emotional voltage!</p>
+                </div>
+                <div class="text-sm text-white/70 space-y-1">
+                    <p>📊 Taller bars = Stronger magical presence</p>
+                    <p>⚖️ Balanced bars = Harmonious energy mix</p>
+                    <p>🎯 Single tall bar = Focused emotional beam</p>
+                </div>
+            `;
+
+    // Word Frequency Explanation
+    const wordFrequencyExplanation = document.getElementById('wordFrequencyExplanation');
+    const topWords = [...analysis.words.positive, ...analysis.words.negative, ...analysis.words.neutral];
+    const mostCommon = topWords.length > 0 ? topWords[0] : 'none';
+
+    wordFrequencyExplanation.innerHTML = `
+                <div class="bg-gradient-to-r from-white/10 to-white/5 border-l-4 border-green-400 p-4 rounded-r-xl backdrop-blur-sm">
+                    <p class="text-white font-medium">🏆 <strong>Champion Analysis:</strong> This arena reveals which emotional warriors appear most often, showing the true sentiment champions of your text!</p>
+                </div>
+                <div class="text-sm text-white/70 space-y-1">
+                    <p>🟢 Green bars = Happy warriors</p>
+                    <p>🔴 Red bars = Grumpy fighters</p>
+                    <p>⚪ Gray bars = Chill defenders</p>
+                    <p>📏 Longer bars = More battle appearances</p>
+                </div>
+            `;
+}
+
+
+
+function loadSampleData() {
+    const sampleReviews = [
+        "This product is absolutely amazing! The quality exceeded my expectations and the customer service was outstanding. I would definitely recommend this to anyone looking for excellence.",
+        "Terrible experience. The product broke after just one day and customer support was completely unhelpful. Total waste of money. Very disappointed.",
+        "The product is okay. It's average quality and does what it's supposed to do. Nothing particularly good or bad about it. Fair price for what you get.",
+        "I love this! Best purchase I've made in years. The design is beautiful and it works perfectly. Five stars!",
+        "Poor quality control. The item arrived damaged and the replacement process was frustrating. Not worth the price.",
+        "It's fine, I guess. Normal shipping time and standard packaging. The product is adequate for basic use."
+    ];
+
+    document.getElementById('textInput').value = sampleReviews.join('\n\n');
+}
+
+function analyzeBatch() {
+    const batchText = document.getElementById('batchTextInput').value.trim();
+    if (!batchText) {
+        alert('Please enter batch text or upload a file!');
+        return;
+    }
+
+    // Split text into individual items (by double newlines or single newlines)
+    const texts = batchText.split(/\n\s*\n/).filter(text => text.trim().length > 0);
+    if (texts.length === 0) {
+        // Try single newlines if double newlines don't work
+        const singleLineTexts = batchText.split('\n').filter(text => text.trim().length > 0);
+        if (singleLineTexts.length === 0) {
+            alert('No valid text found to analyze!');
+            return;
+        }
+        texts.push(...singleLineTexts);
+    }
+
+    // Show loading state
+    document.getElementById('batchAnalyzeText').textContent = 'Casting Spells...';
+
+    // Analyze each text
+    batchResults = [];
+    texts.forEach((text, index) => {
+        const analysis = performSentimentAnalysis(text.trim());
+        batchResults.push({
+            id: index + 1,
+            text: text.trim(),
+            analysis: analysis
         });
+    });
 
-        function analyzeSentiment() {
-            const text = document.getElementById('textInput').value.trim();
-            if (!text) {
-                alert('Please enter some text to analyze!');
-                return;
-            }
+    displayBatchResults();
+    document.getElementById('batchAnalyzeText').textContent = 'Analyze Batch Magic';
+}
 
-            // Show loading state
-            const button = event.target;
-            const originalText = button.innerHTML;
-            button.innerHTML = '🔄 Analyzing...';
-            button.disabled = true;
+function displayBatchResults() {
+    document.getElementById('batchResultsSection').classList.remove('hidden');
 
-            // Simulate analysis delay
-            setTimeout(() => {
-                const result = performSentimentAnalysis(text);
-                currentAnalysisResult = result;
-                updateResults(result);
-                button.innerHTML = originalText;
-                button.disabled = false;
-                document.getElementById('resultsSection').classList.remove('hidden');
-                document.getElementById('exportOptions').classList.remove('hidden');
-                document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
-            }, 1500);
-        }
+    // Calculate batch summary
+    const totalTexts = batchResults.length;
+    const positiveCount = batchResults.filter(r => r.analysis.overall === 'Positive').length;
+    const negativeCount = batchResults.filter(r => r.analysis.overall === 'Negative').length;
+    const neutralCount = batchResults.filter(r => r.analysis.overall === 'Neutral').length;
+    const mixedCount = batchResults.filter(r => r.analysis.overall === 'Mixed').length;
 
-        function performSentimentAnalysis(text) {
-            const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-            const words = text.toLowerCase().match(/\b\w+\b/g) || [];
-            
-            let positiveScore = 0;
-            let negativeScore = 0;
-            let neutralScore = 0;
-            let totalWords = words.length;
-
-            const foundPositiveWords = [];
-            const foundNegativeWords = [];
-            const foundNeutralWords = [];
-            
-            // Advanced sentiment scoring with intensity levels
-            const sentimentScores = [];
-
-            // Analyze words with context and modifiers
-            for (let i = 0; i < words.length; i++) {
-                const word = words[i];
-                const prevWord = i > 0 ? words[i - 1] : '';
-                const nextWord = i < words.length - 1 ? words[i + 1] : '';
-                
-                let wordScore = 0;
-                let wordIntensity = 1;
-                let isNegated = false;
-
-                // Check for negation in previous 2 words
-                for (let j = Math.max(0, i - 2); j < i; j++) {
-                    if (sentimentModifiers.negators.includes(words[j])) {
-                        isNegated = true;
-                        break;
-                    }
-                }
-
-                // Check for intensifiers/diminishers
-                if (sentimentModifiers.intensifiers.includes(prevWord)) {
-                    wordIntensity = 1.5;
-                } else if (sentimentModifiers.diminishers.includes(prevWord)) {
-                    wordIntensity = 0.7;
-                }
-
-                // Classify word sentiment with intensity
-                if (sentimentWords.positive.strong.includes(word)) {
-                    wordScore = 3 * wordIntensity;
-                    if (!foundPositiveWords.includes(word)) foundPositiveWords.push(word);
-                } else if (sentimentWords.positive.moderate.includes(word)) {
-                    wordScore = 2 * wordIntensity;
-                    if (!foundPositiveWords.includes(word)) foundPositiveWords.push(word);
-                } else if (sentimentWords.positive.mild.includes(word)) {
-                    wordScore = 1 * wordIntensity;
-                    if (!foundPositiveWords.includes(word)) foundPositiveWords.push(word);
-                } else if (sentimentWords.negative.strong.includes(word)) {
-                    wordScore = -3 * wordIntensity;
-                    if (!foundNegativeWords.includes(word)) foundNegativeWords.push(word);
-                } else if (sentimentWords.negative.moderate.includes(word)) {
-                    wordScore = -2 * wordIntensity;
-                    if (!foundNegativeWords.includes(word)) foundNegativeWords.push(word);
-                } else if (sentimentWords.negative.mild.includes(word)) {
-                    wordScore = -1 * wordIntensity;
-                    if (!foundNegativeWords.includes(word)) foundNegativeWords.push(word);
-                } else if (sentimentWords.neutral.factual.includes(word) || 
-                          sentimentWords.neutral.descriptive.includes(word) || 
-                          sentimentWords.neutral.transitional.includes(word)) {
-                    wordScore = 0;
-                    if (word.length > 3 && !foundNeutralWords.includes(word)) {
-                        foundNeutralWords.push(word);
-                    }
-                } else if (word.length > 3 && !foundNeutralWords.includes(word)) {
-                    foundNeutralWords.push(word);
-                }
-
-                // Apply negation
-                if (isNegated && wordScore !== 0) {
-                    wordScore = -wordScore * 0.8; // Negation reduces intensity slightly
-                }
-
-                sentimentScores.push(wordScore);
-                
-                if (wordScore > 0) positiveScore += wordScore;
-                else if (wordScore < 0) negativeScore += Math.abs(wordScore);
-                else neutralScore += 1;
-            }
-
-            // Calculate advanced metrics
-            const totalSentimentScore = positiveScore + negativeScore;
-            const rawPositivePercent = totalSentimentScore > 0 ? (positiveScore / totalSentimentScore) * 100 : 33;
-            const rawNegativePercent = totalSentimentScore > 0 ? (negativeScore / totalSentimentScore) * 100 : 33;
-            
-            // Normalize percentages including neutral content
-            const totalClassifiedWords = positiveScore + negativeScore + neutralScore;
-            const positivePercent = Math.round((positiveScore / totalClassifiedWords) * 100);
-            const negativePercent = Math.round((negativeScore / totalClassifiedWords) * 100);
-            const neutralPercent = Math.round((neutralScore / totalClassifiedWords) * 100);
-
-            // Advanced overall sentiment classification
-            const overallSentimentScore = (positiveScore - negativeScore) / totalWords;
-            const sentimentMagnitude = Math.abs(overallSentimentScore);
-            
-            let overallSentiment, sentimentEmoji, sentimentColor, confidenceLevel;
-            
-            if (overallSentimentScore > 0.05) {
-                if (overallSentimentScore > 0.15) {
-                    overallSentiment = 'Very Positive';
-                    sentimentEmoji = '🤩';
-                } else if (overallSentimentScore > 0.08) {
-                    overallSentiment = 'Positive';
-                    sentimentEmoji = '😊';
-                } else {
-                    overallSentiment = 'Slightly Positive';
-                    sentimentEmoji = '🙂';
-                }
-                sentimentColor = 'text-green-600';
-            } else if (overallSentimentScore < -0.05) {
-                if (overallSentimentScore < -0.15) {
-                    overallSentiment = 'Very Negative';
-                    sentimentEmoji = '😡';
-                } else if (overallSentimentScore < -0.08) {
-                    overallSentiment = 'Negative';
-                    sentimentEmoji = '😞';
-                } else {
-                    overallSentiment = 'Slightly Negative';
-                    sentimentEmoji = '😕';
-                }
-                sentimentColor = 'text-red-600';
-            } else {
-                if (Math.abs(overallSentimentScore) < 0.02) {
-                    overallSentiment = 'Neutral';
-                    sentimentEmoji = '😐';
-                } else {
-                    overallSentiment = 'Mixed';
-                    sentimentEmoji = '🤔';
-                }
-                sentimentColor = 'text-gray-600';
-            }
-
-            // Advanced confidence scoring system
-            const sentimentWordDensity = (positiveScore + negativeScore) / totalWords;
-            const sentimentConsistency = 1 - (Math.min(positiveScore, negativeScore) / Math.max(positiveScore, negativeScore, 1));
-            const wordCoverage = (foundPositiveWords.length + foundNegativeWords.length) / totalWords;
-            
-            // Calculate individual confidence scores for each class
-            const positiveConfidence = Math.min(95, Math.max(30, 
-                (positiveScore / Math.max(positiveScore + negativeScore, 1)) * 100 + 
-                (foundPositiveWords.length / Math.max(totalWords * 0.1, 1)) * 50 +
-                (sentimentMagnitude > 0 ? sentimentMagnitude * 200 : 0)
-            ));
-            
-            const negativeConfidence = Math.min(95, Math.max(30,
-                (negativeScore / Math.max(positiveScore + negativeScore, 1)) * 100 + 
-                (foundNegativeWords.length / Math.max(totalWords * 0.1, 1)) * 50 +
-                (sentimentMagnitude > 0 && overallSentimentScore < 0 ? sentimentMagnitude * 200 : 0)
-            ));
-            
-            const neutralConfidence = Math.min(95, Math.max(40,
-                (neutralScore / totalWords) * 100 +
-                (Math.abs(overallSentimentScore) < 0.05 ? 40 : 0) +
-                (sentimentWordDensity < 0.1 ? 30 : 0)
-            ));
-            
-            // Overall confidence based on multiple factors
-            confidenceLevel = Math.min(95, Math.max(50, 
-                (sentimentWordDensity * 150) + 
-                (sentimentConsistency * 25) + 
-                (sentimentMagnitude * 100) +
-                (wordCoverage * 50) +
-                (sentences.length > 3 ? 10 : 0) // Bonus for longer texts
-            ));
-
-            // Determine intensity level
-            let intensity;
-            if (sentimentMagnitude > 0.12) intensity = 'Very High';
-            else if (sentimentMagnitude > 0.08) intensity = 'High';
-            else if (sentimentMagnitude > 0.04) intensity = 'Medium';
-            else if (sentimentMagnitude > 0.02) intensity = 'Low';
-            else intensity = 'Very Low';
-
-            return {
-                overallSentiment,
-                sentimentEmoji,
-                sentimentColor,
-                positivePercent,
-                negativePercent,
-                neutralPercent,
-                wordCount: totalWords,
-                sentenceCount: sentences.length,
-                avgSentiment: overallSentimentScore.toFixed(3),
-                intensity,
-                confidence: Math.round(confidenceLevel),
-                positiveConfidence: Math.round(positiveConfidence),
-                negativeConfidence: Math.round(negativeConfidence),
-                neutralConfidence: Math.round(neutralConfidence),
-                sentimentDensity: Math.round(sentimentWordDensity * 100),
-                wordCoverage: Math.round(wordCoverage * 100),
-                consistencyScore: sentimentConsistency.toFixed(2),
-                foundPositiveWords: foundPositiveWords.slice(0, 12),
-                foundNegativeWords: foundNegativeWords.slice(0, 12),
-                foundNeutralWords: foundNeutralWords.slice(0, 15),
-                sentences,
-                sentimentScore: overallSentimentScore,
-                sentimentMagnitude,
-                positiveScore,
-                negativeScore,
-                neutralScore
-            };
-        }
-
-        function toggleKeywordView(view) {
-            currentKeywordView = view;
-            
-            // Update button states
-            const impactBtn = document.getElementById('impactViewBtn');
-            const frequencyBtn = document.getElementById('frequencyViewBtn');
-            
-            if (view === 'impact') {
-                impactBtn.className = 'px-3 py-1 bg-blue-600 text-white text-sm rounded-lg font-medium transition-colors';
-                frequencyBtn.className = 'px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded-lg font-medium transition-colors hover:bg-gray-400';
-            } else {
-                frequencyBtn.className = 'px-3 py-1 bg-blue-600 text-white text-sm rounded-lg font-medium transition-colors';
-                impactBtn.className = 'px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded-lg font-medium transition-colors hover:bg-gray-400';
-            }
-            
-            // Refresh keyword display
-            if (keywordAnalysisData.originalText) {
-                updateKeywordAnalysis(keywordAnalysisData);
-            }
-        }
-
-        function updateResults(data) {
-            // Update overall sentiment
-            document.getElementById('overallSentiment').textContent = data.sentimentEmoji;
-            document.getElementById('sentimentLabel').textContent = data.overallSentiment;
-            document.getElementById('sentimentLabel').className = `text-2xl font-bold ${data.sentimentColor}`;
-            document.getElementById('confidenceScore').textContent = `Confidence: ${data.confidence}%`;
-
-            // Update percentages and bars
-            document.getElementById('positivePercent').textContent = `${data.positivePercent}%`;
-            document.getElementById('positiveBar').style.width = `${data.positivePercent}%`;
-            document.getElementById('neutralPercent').textContent = `${data.neutralPercent}%`;
-            document.getElementById('neutralBar').style.width = `${data.neutralPercent}%`;
-            document.getElementById('negativePercent').textContent = `${data.negativePercent}%`;
-            document.getElementById('negativeBar').style.width = `${data.negativePercent}%`;
-
-            // Update metrics
-            document.getElementById('wordCount').textContent = data.wordCount;
-            document.getElementById('sentenceCount').textContent = data.sentenceCount;
-            document.getElementById('avgSentiment').textContent = data.avgSentiment;
-            document.getElementById('intensity').textContent = data.intensity;
-
-            // Update confidence scores
-            document.getElementById('overallConfidence').textContent = `${data.confidence}%`;
-            document.getElementById('overallConfidenceBar').style.width = `${data.confidence}%`;
-            document.getElementById('positiveConfidence').textContent = `${data.positiveConfidence}%`;
-            document.getElementById('positiveConfidenceBar').style.width = `${data.positiveConfidence}%`;
-            document.getElementById('negativeConfidence').textContent = `${data.negativeConfidence}%`;
-            document.getElementById('negativeConfidenceBar').style.width = `${data.negativeConfidence}%`;
-            document.getElementById('neutralConfidence').textContent = `${data.neutralConfidence}%`;
-            document.getElementById('neutralConfidenceBar').style.width = `${data.neutralConfidence}%`;
-            
-            // Update confidence metrics
-            document.getElementById('sentimentDensity').textContent = `${data.sentimentDensity}%`;
-            document.getElementById('wordCoverage').textContent = `${data.wordCoverage}%`;
-            document.getElementById('consistencyScore').textContent = data.consistencyScore;
-
-            // Update detailed explanations
-            updateSentimentExplanation(data);
-
-            // Update keyword analysis
-            updateKeywordAnalysis(data);
-
-            // Update insights
-            updateInsights(data);
-
-            // Update sentence analysis
-            updateSentenceAnalysis(data.sentences, data.sentimentScore);
-
-            // Update chart
-            updateChart(data.positivePercent, data.neutralPercent, data.negativePercent);
-        }
-
-        function updateSentimentExplanation(data) {
-            const originalText = document.getElementById('textInput').value;
-            
-            // Update score breakdown
-            updateScoreBreakdown(data);
-            
-            // Update classification logic
-            updateClassificationLogic(data);
-            
-            // Update key factors
-            updateKeyFactors(data);
-            
-            // Update word-by-word analysis
-            updateWordByWordAnalysis(originalText, data);
-            
-            // Update confidence explanation
-            updateConfidenceExplanation(data);
-            
-            // Update alternative interpretations
-            updateAlternativeInterpretations(data);
-        }
-
-        function updateScoreBreakdown(data) {
-            const container = document.getElementById('scoreBreakdown');
-            
-            const breakdown = [
-                { label: 'Positive Word Score', value: data.positiveScore.toFixed(2), color: 'text-green-600' },
-                { label: 'Negative Word Score', value: data.negativeScore.toFixed(2), color: 'text-red-600' },
-                { label: 'Neutral Word Score', value: data.neutralScore.toFixed(2), color: 'text-gray-600' },
-                { label: 'Total Words Analyzed', value: data.wordCount, color: 'text-blue-600' },
-                { label: 'Final Sentiment Score', value: data.avgSentiment, color: 'text-purple-600' },
-                { label: 'Sentiment Magnitude', value: data.sentimentMagnitude.toFixed(3), color: 'text-orange-600' }
-            ];
-            
-            container.innerHTML = breakdown.map(item => `
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-700">${item.label}:</span>
-                    <span class="font-semibold ${item.color}">${item.value}</span>
+    // Batch summary
+    const summaryDiv = document.getElementById('batchSummary');
+    summaryDiv.innerHTML = `
+                <div class="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 p-6 rounded-2xl border border-white/20 backdrop-blur-sm text-center">
+                    <div class="text-3xl mb-2">📊</div>
+                    <div class="text-3xl font-bold text-white neon-text">${totalTexts}</div>
+                    <div class="text-sm text-white/80">Total Spells</div>
                 </div>
-            `).join('');
-        }
-
-        function updateClassificationLogic(data) {
-            const container = document.getElementById('classificationLogic');
-            
-            const logic = [];
-            
-            // Explain the classification decision
-            if (data.sentimentScore > 0.05) {
-                logic.push(`✅ Sentiment score (${data.avgSentiment}) > 0.05 → Positive classification`);
-                if (data.sentimentScore > 0.15) {
-                    logic.push(`⭐ Score > 0.15 → Upgraded to "Very Positive"`);
-                } else if (data.sentimentScore > 0.08) {
-                    logic.push(`📈 Score > 0.08 → Classified as "Positive"`);
-                } else {
-                    logic.push(`📊 Score 0.05-0.08 → Classified as "Slightly Positive"`);
-                }
-            } else if (data.sentimentScore < -0.05) {
-                logic.push(`❌ Sentiment score (${data.avgSentiment}) < -0.05 → Negative classification`);
-                if (data.sentimentScore < -0.15) {
-                    logic.push(`⚠️ Score < -0.15 → Upgraded to "Very Negative"`);
-                } else if (data.sentimentScore < -0.08) {
-                    logic.push(`📉 Score < -0.08 → Classified as "Negative"`);
-                } else {
-                    logic.push(`📊 Score -0.08 to -0.05 → Classified as "Slightly Negative"`);
-                }
-            } else {
-                logic.push(`⚖️ Sentiment score (${data.avgSentiment}) between -0.05 and 0.05 → Neutral/Mixed`);
-                if (Math.abs(data.sentimentScore) < 0.02) {
-                    logic.push(`🎯 |Score| < 0.02 → Pure "Neutral" classification`);
-                } else {
-                    logic.push(`🤔 Slight bias detected → "Mixed" classification`);
-                }
-            }
-            
-            logic.push(`🎯 Confidence calculated from word density (${data.sentimentDensity}%) + consistency (${data.consistencyScore})`);
-            
-            container.innerHTML = logic.map(item => `
-                <div class="text-gray-700">${item}</div>
-            `).join('');
-        }
-
-        function updateKeyFactors(data) {
-            const container = document.getElementById('keyFactors');
-            
-            const factors = [];
-            
-            // Determine key factors based on the analysis
-            if (data.sentimentDensity >= 20) {
-                factors.push({
-                    icon: '💪',
-                    title: 'High Emotional Density',
-                    description: `${data.sentimentDensity}% of words carry emotional weight`,
-                    impact: 'Strong',
-                    color: 'bg-green-50 border-green-200 text-green-800'
-                });
-            } else if (data.sentimentDensity <= 10) {
-                factors.push({
-                    icon: '📋',
-                    title: 'Low Emotional Content',
-                    description: `Only ${data.sentimentDensity}% emotional words detected`,
-                    impact: 'Moderate',
-                    color: 'bg-blue-50 border-blue-200 text-blue-800'
-                });
-            }
-            
-            if (data.consistencyScore >= 0.7) {
-                factors.push({
-                    icon: '🎯',
-                    title: 'Consistent Sentiment',
-                    description: `${(data.consistencyScore * 100).toFixed(0)}% consistency across text`,
-                    impact: 'Strong',
-                    color: 'bg-green-50 border-green-200 text-green-800'
-                });
-            } else if (data.consistencyScore <= 0.4) {
-                factors.push({
-                    icon: '🌊',
-                    title: 'Mixed Signals',
-                    description: `${(data.consistencyScore * 100).toFixed(0)}% consistency - conflicting sentiments`,
-                    impact: 'Moderate',
-                    color: 'bg-yellow-50 border-yellow-200 text-yellow-800'
-                });
-            }
-            
-            if (data.wordCount >= 50) {
-                factors.push({
-                    icon: '📚',
-                    title: 'Comprehensive Text',
-                    description: `${data.wordCount} words provide reliable analysis`,
-                    impact: 'Strong',
-                    color: 'bg-green-50 border-green-200 text-green-800'
-                });
-            } else if (data.wordCount <= 20) {
-                factors.push({
-                    icon: '⚠️',
-                    title: 'Limited Text Sample',
-                    description: `Only ${data.wordCount} words - may affect accuracy`,
-                    impact: 'Weak',
-                    color: 'bg-red-50 border-red-200 text-red-800'
-                });
-            }
-            
-            // Add more factors if needed
-            if (factors.length < 3) {
-                if (data.sentimentMagnitude > 0.1) {
-                    factors.push({
-                        icon: '⚡',
-                        title: 'Strong Sentiment Signal',
-                        description: `High magnitude (${data.sentimentMagnitude.toFixed(3)}) indicates clear sentiment`,
-                        impact: 'Strong',
-                        color: 'bg-purple-50 border-purple-200 text-purple-800'
-                    });
-                }
-            }
-            
-            container.innerHTML = factors.map(factor => `
-                <div class="p-3 rounded-lg border ${factor.color}">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="text-lg">${factor.icon}</span>
-                        <span class="font-medium">${factor.title}</span>
-                    </div>
-                    <p class="text-sm mb-2">${factor.description}</p>
-                    <span class="text-xs px-2 py-1 rounded-full bg-white bg-opacity-50">
-                        ${factor.impact} Impact
-                    </span>
+                <div class="bg-gradient-to-br from-green-500/20 to-emerald-500/20 p-6 rounded-2xl border border-white/20 backdrop-blur-sm text-center">
+                    <div class="text-3xl mb-2">😊</div>
+                    <div class="text-3xl font-bold text-green-400 neon-text">${positiveCount}</div>
+                    <div class="text-sm text-white/80">Happy Magic</div>
                 </div>
-            `).join('');
-        }
-
-        function updateWordByWordAnalysis(originalText, data) {
-            const container = document.getElementById('wordByWordAnalysis');
-            const words = originalText.split(/(\s+)/); // Preserve whitespace
-            
-            let analysisHtml = '';
-            let wordIndex = 0;
-            
-            words.forEach((word, index) => {
-                const cleanWord = word.toLowerCase().replace(/[^\w]/g, '');
-                
-                if (cleanWord.length > 0) {
-                    const wordData = analyzeWordContribution(cleanWord, wordIndex, originalText.toLowerCase().match(/\b\w+\b/g) || []);
-                    
-                    let className = 'cursor-pointer hover:bg-gray-200 px-1 rounded transition-colors';
-                    let title = `Click for details: ${wordData.explanation}`;
-                    
-                    if (wordData.impact > 0) {
-                        className += wordData.impact >= 2 ? ' bg-green-200 text-green-900' : ' bg-green-100 text-green-800';
-                    } else if (wordData.impact < 0) {
-                        className += Math.abs(wordData.impact) >= 2 ? ' bg-red-200 text-red-900' : ' bg-red-100 text-red-800';
-                    } else if (wordData.isModifier) {
-                        className += ' bg-blue-100 text-blue-800';
-                    }
-                    
-                    analysisHtml += `<span class="${className}" title="${title}" onclick="showWordDetails('${cleanWord}', ${wordData.impact}, '${wordData.explanation.replace(/'/g, '\\\'')}')">${word}</span>`;
-                    wordIndex++;
-                } else {
-                    analysisHtml += word;
-                }
-            });
-            
-            container.innerHTML = analysisHtml;
-        }
-
-        function analyzeWordContribution(word, index, allWords) {
-            let impact = 0;
-            let explanation = '';
-            let isModifier = false;
-            let wordIntensity = 1;
-            let isNegated = false;
-            
-            // Check for negation in previous words
-            for (let j = Math.max(0, index - 2); j < index; j++) {
-                if (sentimentModifiers.negators.includes(allWords[j])) {
-                    isNegated = true;
-                    break;
-                }
-            }
-            
-            // Check for intensifiers/diminishers
-            const prevWord = index > 0 ? allWords[index - 1] : '';
-            if (sentimentModifiers.intensifiers.includes(prevWord)) {
-                wordIntensity = 1.5;
-            } else if (sentimentModifiers.diminishers.includes(prevWord)) {
-                wordIntensity = 0.7;
-            }
-            
-            // Analyze word sentiment
-            if (sentimentWords.positive.strong.includes(word)) {
-                impact = 3 * wordIntensity;
-                explanation = `Strong positive word (+${impact.toFixed(1)})`;
-            } else if (sentimentWords.positive.moderate.includes(word)) {
-                impact = 2 * wordIntensity;
-                explanation = `Moderate positive word (+${impact.toFixed(1)})`;
-            } else if (sentimentWords.positive.mild.includes(word)) {
-                impact = 1 * wordIntensity;
-                explanation = `Mild positive word (+${impact.toFixed(1)})`;
-            } else if (sentimentWords.negative.strong.includes(word)) {
-                impact = -3 * wordIntensity;
-                explanation = `Strong negative word (${impact.toFixed(1)})`;
-            } else if (sentimentWords.negative.moderate.includes(word)) {
-                impact = -2 * wordIntensity;
-                explanation = `Moderate negative word (${impact.toFixed(1)})`;
-            } else if (sentimentWords.negative.mild.includes(word)) {
-                impact = -1 * wordIntensity;
-                explanation = `Mild negative word (${impact.toFixed(1)})`;
-            } else if (sentimentModifiers.intensifiers.includes(word)) {
-                isModifier = true;
-                explanation = 'Intensifier - amplifies next sentiment word by 50%';
-            } else if (sentimentModifiers.diminishers.includes(word)) {
-                isModifier = true;
-                explanation = 'Diminisher - reduces next sentiment word by 30%';
-            } else if (sentimentModifiers.negators.includes(word)) {
-                isModifier = true;
-                explanation = 'Negator - reverses sentiment of following words';
-            } else {
-                explanation = 'Neutral word - no sentiment impact';
-            }
-            
-            // Apply negation
-            if (isNegated && impact !== 0) {
-                const originalImpact = impact;
-                impact = -impact * 0.8;
-                explanation += ` → Negated: ${originalImpact.toFixed(1)} becomes ${impact.toFixed(1)}`;
-            }
-            
-            // Add intensity modifier info
-            if (wordIntensity !== 1 && impact !== 0) {
-                explanation += ` (${wordIntensity > 1 ? 'intensified' : 'diminished'} by ${Math.abs(wordIntensity - 1) * 100}%)`;
-            }
-            
-            return { impact, explanation, isModifier };
-        }
-
-        function showWordDetails(word, impact, explanation) {
-            alert(`Word: "${word}"\nImpact Score: ${impact.toFixed(2)}\nExplanation: ${explanation}`);
-        }
-
-        function updateConfidenceExplanation(data) {
-            const container = document.getElementById('confidenceExplanation');
-            
-            const factors = [];
-            
-            // Explain confidence calculation
-            factors.push(`🎯 <strong>Overall Confidence: ${data.confidence}%</strong>`);
-            factors.push(`📊 Based on multiple factors:`);
-            
-            // Sentiment density factor
-            const densityContribution = Math.min(30, data.sentimentDensity * 1.5);
-            factors.push(`• Sentiment word density (${data.sentimentDensity}%): +${densityContribution.toFixed(1)} points`);
-            
-            // Consistency factor
-            const consistencyContribution = data.consistencyScore * 25;
-            factors.push(`• Sentiment consistency (${(data.consistencyScore * 100).toFixed(0)}%): +${consistencyContribution.toFixed(1)} points`);
-            
-            // Magnitude factor
-            const magnitudeContribution = data.sentimentMagnitude * 100;
-            factors.push(`• Sentiment magnitude (${data.sentimentMagnitude.toFixed(3)}): +${magnitudeContribution.toFixed(1)} points`);
-            
-            // Word coverage factor
-            const coverageContribution = data.wordCoverage * 0.5;
-            factors.push(`• Word coverage (${data.wordCoverage}%): +${coverageContribution.toFixed(1)} points`);
-            
-            // Text length bonus
-            const lengthBonus = data.sentenceCount > 3 ? 10 : 0;
-            if (lengthBonus > 0) {
-                factors.push(`• Text length bonus (${data.sentenceCount} sentences): +${lengthBonus} points`);
-            }
-            
-            factors.push(`📈 <strong>Interpretation:</strong>`);
-            if (data.confidence >= 85) {
-                factors.push(`• Very high confidence - strong, consistent sentiment signals`);
-            } else if (data.confidence >= 70) {
-                factors.push(`• Good confidence - reliable sentiment classification`);
-            } else if (data.confidence >= 55) {
-                factors.push(`• Moderate confidence - some uncertainty in classification`);
-            } else {
-                factors.push(`• Low confidence - ambiguous or mixed sentiment signals`);
-            }
-            
-            container.innerHTML = factors.map(factor => `<div class="text-sm text-gray-700">${factor}</div>`).join('');
-        }
-
-        function updateAlternativeInterpretations(data) {
-            const container = document.getElementById('alternativeInterpretations');
-            
-            const alternatives = [];
-            
-            // Generate alternative interpretations based on the data
-            if (data.overallSentiment.includes('Positive') && data.negativePercent > 20) {
-                alternatives.push({
-                    title: '🤔 Mixed Sentiment Perspective',
-                    description: `While classified as ${data.overallSentiment.toLowerCase()}, the text contains ${data.negativePercent}% negative sentiment. This could indicate nuanced opinions or balanced feedback.`,
-                    confidence: Math.max(30, data.confidence - 20)
-                });
-            }
-            
-            if (data.overallSentiment.includes('Negative') && data.positivePercent > 20) {
-                alternatives.push({
-                    title: '🌅 Constructive Criticism View',
-                    description: `Despite the ${data.overallSentiment.toLowerCase()} classification, ${data.positivePercent}% positive sentiment suggests constructive feedback rather than pure negativity.`,
-                    confidence: Math.max(30, data.confidence - 20)
-                });
-            }
-            
-            if (data.confidence < 70) {
-                alternatives.push({
-                    title: '⚖️ Neutral Interpretation',
-                    description: `Given the moderate confidence (${data.confidence}%), this text could be interpreted as neutral with slight emotional leanings rather than definitively ${data.overallSentiment.toLowerCase()}.`,
-                    confidence: Math.min(75, data.confidence + 15)
-                });
-            }
-            
-            if (data.sentimentDensity < 15) {
-                alternatives.push({
-                    title: '📋 Factual Content View',
-                    description: `Low emotional density (${data.sentimentDensity}%) suggests this might be primarily factual content with incidental sentiment rather than opinion-focused text.`,
-                    confidence: Math.max(40, 80 - data.sentimentDensity * 2)
-                });
-            }
-            
-            if (data.wordCount < 30) {
-                alternatives.push({
-                    title: '⚠️ Limited Context Consideration',
-                    description: `With only ${data.wordCount} words, the sentiment might change significantly with additional context. Consider analyzing a longer text sample for more reliable results.`,
-                    confidence: Math.max(25, data.confidence - 30)
-                });
-            }
-            
-            // If no alternatives, add a default one
-            if (alternatives.length === 0) {
-                alternatives.push({
-                    title: '✅ Consistent Classification',
-                    description: `The analysis shows consistent sentiment signals with high confidence. Alternative interpretations are unlikely to significantly change the classification.`,
-                    confidence: Math.min(95, data.confidence + 10)
-                });
-            }
-            
-            container.innerHTML = alternatives.map(alt => `
-                <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <h5 class="font-medium text-gray-800 mb-2">${alt.title}</h5>
-                    <p class="text-sm text-gray-700 mb-2">${alt.description}</p>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-500">Alternative confidence:</span>
-                        <div class="flex-1 bg-gray-200 rounded-full h-2 max-w-24">
-                            <div class="bg-blue-500 h-2 rounded-full" style="width: ${alt.confidence}%"></div>
-                        </div>
-                        <span class="text-xs text-gray-600">${alt.confidence}%</span>
-                    </div>
+                <div class="bg-gradient-to-br from-red-500/20 to-pink-500/20 p-6 rounded-2xl border border-white/20 backdrop-blur-sm text-center">
+                    <div class="text-3xl mb-2">😞</div>
+                    <div class="text-3xl font-bold text-red-400 neon-text">${negativeCount}</div>
+                    <div class="text-sm text-white/80">Sad Curses</div>
                 </div>
-            `).join('');
-        }
+                <div class="bg-gradient-to-br from-gray-500/20 to-slate-500/20 p-6 rounded-2xl border border-white/20 backdrop-blur-sm text-center">
+                    <div class="text-3xl mb-2">😐</div>
+                    <div class="text-3xl font-bold text-gray-400 neon-text">${neutralCount + mixedCount}</div>
+                    <div class="text-sm text-white/80">Neutral/Mixed</div>
+                </div>
+            `;
 
-        function updateKeywordAnalysis(data) {
-            keywordAnalysisData = data;
-            const originalText = document.getElementById('textInput').value;
-            
-            // Extract and analyze keywords with their impact scores
-            const keywordData = extractSentimentDrivers(originalText);
-            
-            // Update top drivers
-            updateTopDrivers(keywordData.topDrivers);
-            
-            // Update keyword categories
-            updateKeywordCategories(keywordData);
-            
-            // Update highlighted text
-            updateHighlightedText(originalText, keywordData.allKeywords);
-        }
+    // Overall batch sentiment
+    const overallDiv = document.getElementById('batchOverallSentiment');
+    const dominantSentiment = positiveCount > negativeCount && positiveCount > neutralCount + mixedCount ? 'Positive' :
+        negativeCount > positiveCount && negativeCount > neutralCount + mixedCount ? 'Negative' : 'Neutral';
+    const dominantEmoji = dominantSentiment === 'Positive' ? '😊' : dominantSentiment === 'Negative' ? '😞' : '😐';
 
-        function extractSentimentDrivers(text) {
-            const words = text.toLowerCase().match(/\b\w+\b/g) || [];
-            const keywordMap = new Map();
-            const modifierMap = new Map();
-            const neutralMap = new Map();
-            
-            // Analyze each word for sentiment impact and frequency
-            for (let i = 0; i < words.length; i++) {
-                const word = words[i];
-                const prevWord = i > 0 ? words[i - 1] : '';
-                
-                let impact = 0;
-                let category = 'neutral';
-                let strength = 'mild';
-                
-                // Determine word impact and category
-                if (sentimentWords.positive.strong.includes(word)) {
-                    impact = 3;
-                    category = 'positive';
-                    strength = 'strong';
-                } else if (sentimentWords.positive.moderate.includes(word)) {
-                    impact = 2;
-                    category = 'positive';
-                    strength = 'moderate';
-                } else if (sentimentWords.positive.mild.includes(word)) {
-                    impact = 1;
-                    category = 'positive';
-                    strength = 'mild';
-                } else if (sentimentWords.negative.strong.includes(word)) {
-                    impact = 3;
-                    category = 'negative';
-                    strength = 'strong';
-                } else if (sentimentWords.negative.moderate.includes(word)) {
-                    impact = 2;
-                    category = 'negative';
-                    strength = 'moderate';
-                } else if (sentimentWords.negative.mild.includes(word)) {
-                    impact = 1;
-                    category = 'negative';
-                    strength = 'mild';
-                }
-                
-                // Check for modifiers
-                if (sentimentModifiers.intensifiers.includes(word) || 
-                    sentimentModifiers.diminishers.includes(word) || 
-                    sentimentModifiers.negators.includes(word)) {
-                    
-                    const existing = modifierMap.get(word) || { count: 0, impact: 0.5, type: 'modifier' };
-                    existing.count++;
-                    modifierMap.set(word, existing);
-                } else if (impact > 0) {
-                    // Sentiment word
-                    const existing = keywordMap.get(word) || { count: 0, impact: 0, category: category, strength: strength };
-                    existing.count++;
-                    existing.impact = Math.max(existing.impact, impact);
-                    keywordMap.set(word, existing);
-                } else if (word.length > 3) {
-                    // Neutral anchor word
-                    const existing = neutralMap.get(word) || { count: 0, impact: 0, category: 'neutral' };
-                    existing.count++;
-                    neutralMap.set(word, existing);
-                }
-            }
-            
-            // Convert maps to arrays and sort
-            const positiveDrivers = Array.from(keywordMap.entries())
-                .filter(([word, data]) => data.category === 'positive')
-                .sort((a, b) => {
-                    if (currentKeywordView === 'impact') {
-                        return (b[1].impact * b[1].count) - (a[1].impact * a[1].count);
-                    } else {
-                        return b[1].count - a[1].count;
-                    }
-                });
-                
-            const negativeDrivers = Array.from(keywordMap.entries())
-                .filter(([word, data]) => data.category === 'negative')
-                .sort((a, b) => {
-                    if (currentKeywordView === 'impact') {
-                        return (b[1].impact * b[1].count) - (a[1].impact * a[1].count);
-                    } else {
-                        return b[1].count - a[1].count;
-                    }
-                });
-                
-            const modifiers = Array.from(modifierMap.entries())
-                .sort((a, b) => b[1].count - a[1].count);
-                
-            const neutralAnchors = Array.from(neutralMap.entries())
-                .sort((a, b) => b[1].count - a[1].count)
-                .slice(0, 8); // Limit neutral words
-            
-            // Get top overall drivers
-            const allDrivers = [...positiveDrivers, ...negativeDrivers]
-                .sort((a, b) => {
-                    if (currentKeywordView === 'impact') {
-                        return (b[1].impact * b[1].count) - (a[1].impact * a[1].count);
-                    } else {
-                        return b[1].count - a[1].count;
-                    }
-                })
-                .slice(0, 6);
-            
-            return {
-                positiveDrivers: positiveDrivers.slice(0, 8),
-                negativeDrivers: negativeDrivers.slice(0, 8),
-                modifiers: modifiers.slice(0, 6),
-                neutralAnchors: neutralAnchors,
-                topDrivers: allDrivers,
-                allKeywords: new Map([...keywordMap, ...modifierMap])
-            };
-        }
+    overallDiv.innerHTML = `
+                <div class="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md px-8 py-6 rounded-2xl border border-white/30 inline-block">
+                    <div class="text-6xl mb-4 emoji-bounce">${dominantEmoji}</div>
+                    <div class="text-2xl font-bold text-white neon-text">Overall Batch: ${dominantSentiment}</div>
+                    <div class="text-white/80 mt-2">${Math.round((dominantSentiment === 'Positive' ? positiveCount : dominantSentiment === 'Negative' ? negativeCount : neutralCount + mixedCount) / totalTexts * 100)}% of your magical texts</div>
+                </div>
+            `;
 
-        function updateTopDrivers(topDrivers) {
-            const container = document.getElementById('topDrivers');
-            container.innerHTML = '';
-            
-            topDrivers.forEach(([word, data], index) => {
-                const impactScore = currentKeywordView === 'impact' ? 
-                    (data.impact * data.count) : data.count;
-                const maxScore = currentKeywordView === 'impact' ? 
-                    (topDrivers[0][1].impact * topDrivers[0][1].count) : topDrivers[0][1].count;
-                const percentage = (impactScore / maxScore) * 100;
-                
-                const colorClass = data.category === 'positive' ? 
-                    'bg-green-500' : 'bg-red-500';
-                const bgClass = data.category === 'positive' ? 
-                    'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
-                
-                const div = document.createElement('div');
-                div.className = `p-3 rounded-lg border ${bgClass}`;
-                div.innerHTML = `
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="font-medium text-gray-800">${word}</span>
-                        <span class="text-sm text-gray-600">
-                            ${currentKeywordView === 'impact' ? 'Impact' : 'Frequency'}: ${impactScore.toFixed(1)}
+    // Create batch charts
+    createBatchCharts();
+
+    // Individual results
+    const individualDiv = document.getElementById('batchIndividualResults');
+    individualDiv.innerHTML = batchResults.map(result => `
+                <div class="bg-gradient-to-r from-white/10 to-white/5 border border-white/20 rounded-2xl p-6 backdrop-blur-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm text-white/70">🔮 Spell #${result.id}</span>
+                        <span class="bg-gradient-to-r from-white/20 to-white/10 px-4 py-2 rounded-full text-sm font-bold text-white border border-white/30">
+                            ${result.analysis.emoji} ${result.analysis.overall} (${result.analysis.confidence}%)
                         </span>
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2">
-                        <div class="${colorClass} h-2 rounded-full transition-all duration-500" 
-                             style="width: ${percentage}%"></div>
+                    <p class="text-white/90 text-sm leading-relaxed">${result.text.length > 150 ? result.text.substring(0, 150) + '...' : result.text}</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <span class="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded-full border border-green-500/30">+${result.analysis.scores.positive}</span>
+                        <span class="text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded-full border border-red-500/30">-${result.analysis.scores.negative}</span>
+                        <span class="text-xs bg-gray-500/20 text-gray-300 px-2 py-1 rounded-full border border-gray-500/30">=${result.analysis.scores.neutral}</span>
                     </div>
-                    <div class="mt-1 text-xs text-gray-500">
-                        ${data.strength} ${data.category} • appears ${data.count}x
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-        }
+                </div>
+            `).join('');
+}
 
-        function updateKeywordCategories(keywordData) {
-            // Update positive drivers
-            updateDriverCategory('positiveDrivers', 'positiveDriverCount', 
-                keywordData.positiveDrivers, 'bg-green-100 text-green-800 border-green-300');
-            
-            // Update negative drivers
-            updateDriverCategory('negativeDrivers', 'negativeDriverCount', 
-                keywordData.negativeDrivers, 'bg-red-100 text-red-800 border-red-300');
-            
-            // Update modifiers
-            updateDriverCategory('modifierWords', 'modifierCount', 
-                keywordData.modifiers, 'bg-blue-100 text-blue-800 border-blue-300');
-            
-            // Update neutral anchors
-            updateDriverCategory('neutralAnchors', 'neutralAnchorCount', 
-                keywordData.neutralAnchors, 'bg-gray-100 text-gray-800 border-gray-300');
-        }
+function createBatchCharts() {
+    // Batch sentiment distribution
+    const batchCtx = document.getElementById('batchSentimentChart').getContext('2d');
+    if (batchSentimentChart) {
+        batchSentimentChart.destroy();
+    }
 
-        function updateDriverCategory(containerId, countId, drivers, className) {
-            const container = document.getElementById(containerId);
-            const countElement = document.getElementById(countId);
-            
-            container.innerHTML = '';
-            countElement.textContent = drivers.length;
-            
-            drivers.forEach(([word, data]) => {
-                const score = currentKeywordView === 'impact' ? 
-                    (data.impact * data.count) : data.count;
-                
-                const div = document.createElement('div');
-                div.className = `flex items-center justify-between p-2 rounded border ${className}`;
-                div.innerHTML = `
-                    <span class="font-medium">${word}</span>
-                    <div class="text-right">
-                        <div class="text-xs font-medium">${score.toFixed(1)}</div>
-                        <div class="text-xs opacity-75">${data.count}x</div>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-        }
+    const sentimentCounts = {
+        positive: batchResults.filter(r => r.analysis.overall === 'Positive').length,
+        negative: batchResults.filter(r => r.analysis.overall === 'Negative').length,
+        neutral: batchResults.filter(r => r.analysis.overall === 'Neutral').length,
+        mixed: batchResults.filter(r => r.analysis.overall === 'Mixed').length
+    };
 
-        function updateHighlightedText(originalText, keywordMap) {
-            const words = originalText.split(/(\s+)/); // Preserve whitespace
-            let highlightedHtml = '';
-            
-            words.forEach(word => {
-                const cleanWord = word.toLowerCase().replace(/[^\w]/g, '');
-                const keywordData = keywordMap.get(cleanWord);
-                
-                if (keywordData && cleanWord.length > 0) {
-                    let highlightClass = '';
-                    
-                    if (keywordData.category === 'positive') {
-                        highlightClass = keywordData.impact >= 2.5 ? 
-                            'bg-green-200 text-green-900 px-1 rounded' : 
-                            'bg-green-100 text-green-800 px-1 rounded';
-                    } else if (keywordData.category === 'negative') {
-                        highlightClass = keywordData.impact >= 2.5 ? 
-                            'bg-red-200 text-red-900 px-1 rounded' : 
-                            'bg-red-100 text-red-800 px-1 rounded';
-                    } else if (keywordData.type === 'modifier') {
-                        highlightClass = 'bg-blue-200 text-blue-900 px-1 rounded';
-                    }
-                    
-                    highlightedHtml += `<span class="${highlightClass}" title="${keywordData.category} (${keywordData.impact || 0.5})">${word}</span>`;
-                } else {
-                    highlightedHtml += word;
-                }
-            });
-            
-            document.getElementById('highlightedText').innerHTML = highlightedHtml;
-        }
-
-        function updateInsights(data) {
-            const insights = document.getElementById('insights');
-            
-            // Generate advanced insights based on the analysis
-            const insightsList = [];
-            
-            // Overall sentiment insight with confidence breakdown
-            insightsList.push(`📊 Multi-class analysis shows <strong>${data.overallSentiment.toLowerCase()}</strong> sentiment with ${data.confidence}% overall confidence`);
-            
-            // Confidence quality assessment
-            if (data.confidence >= 85) {
-                insightsList.push(`🎯 <strong>High confidence</strong> classification - strong sentiment indicators with ${data.consistencyScore} consistency score`);
-            } else if (data.confidence >= 70) {
-                insightsList.push(`✅ <strong>Good confidence</strong> classification - reliable sentiment patterns detected`);
-            } else if (data.confidence >= 55) {
-                insightsList.push(`⚠️ <strong>Moderate confidence</strong> - mixed signals or limited sentiment indicators`);
-            } else {
-                insightsList.push(`❓ <strong>Low confidence</strong> - ambiguous or insufficient sentiment data`);
-            }
-            
-            // Class-specific confidence insights
-            const maxConfidence = Math.max(data.positiveConfidence, data.negativeConfidence, data.neutralConfidence);
-            let dominantClass = 'neutral';
-            if (maxConfidence === data.positiveConfidence) dominantClass = 'positive';
-            else if (maxConfidence === data.negativeConfidence) dominantClass = 'negative';
-            
-            insightsList.push(`📈 Strongest confidence in <strong>${dominantClass}</strong> classification (${maxConfidence}%) with ${data.wordCoverage}% sentiment word coverage`);
-            
-            // Sentiment density and quality insights
-            if (data.sentimentDensity >= 25) {
-                insightsList.push(`💪 High emotional density (${data.sentimentDensity}%) indicates expressive, opinion-rich content`);
-            } else if (data.sentimentDensity >= 15) {
-                insightsList.push(`📊 Moderate emotional density (${data.sentimentDensity}%) suggests balanced emotional content`);
-            } else {
-                insightsList.push(`📋 Low emotional density (${data.sentimentDensity}%) indicates factual or neutral content`);
-            }
-            
-            // Context-aware insights
-            if (data.sentimentMagnitude > 0.15) {
-                insightsList.push(`⚡ High sentiment magnitude (${data.sentimentMagnitude.toFixed(3)}) with strong classification confidence`);
-            } else if (data.sentimentMagnitude < 0.03) {
-                insightsList.push(`🔍 Low sentiment magnitude (${data.sentimentMagnitude.toFixed(3)}) - neutral content with high certainty`);
-            }
-            
-            // Text length and reliability insight
-            if (data.wordCount > 50 && data.sentenceCount > 3) {
-                insightsList.push(`📝 Comprehensive analysis of ${data.wordCount} words across ${data.sentenceCount} sentences enhances reliability`);
-            } else if (data.wordCount < 20) {
-                insightsList.push(`⚠️ Short text (${data.wordCount} words) may limit classification accuracy - consider longer samples`);
-            }
-
-            insights.innerHTML = insightsList.map(insight => 
-                `<div class="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400">${insight}</div>`
-            ).join('');
-        }
-
-        function updateSentenceAnalysis(sentences, overallScore) {
-            const container = document.getElementById('sentenceAnalysis');
-            container.innerHTML = '';
-
-            sentences.forEach((sentence, index) => {
-                const trimmed = sentence.trim();
-                if (trimmed.length === 0) return;
-
-                // Advanced sentiment analysis for each sentence
-                const words = trimmed.toLowerCase().match(/\b\w+\b/g) || [];
-                let sentenceScore = 0;
-                let positiveWords = 0;
-                let negativeWords = 0;
-                let neutralWords = 0;
-
-                // Apply the same advanced analysis to each sentence
-                for (let i = 0; i < words.length; i++) {
-                    const word = words[i];
-                    const prevWord = i > 0 ? words[i - 1] : '';
-                    
-                    let wordScore = 0;
-                    let wordIntensity = 1;
-                    let isNegated = false;
-
-                    // Check for negation
-                    for (let j = Math.max(0, i - 2); j < i; j++) {
-                        if (sentimentModifiers.negators.includes(words[j])) {
-                            isNegated = true;
-                            break;
-                        }
-                    }
-
-                    // Check for intensifiers/diminishers
-                    if (sentimentModifiers.intensifiers.includes(prevWord)) {
-                        wordIntensity = 1.5;
-                    } else if (sentimentModifiers.diminishers.includes(prevWord)) {
-                        wordIntensity = 0.7;
-                    }
-
-                    // Classify word sentiment
-                    if (sentimentWords.positive.strong.includes(word)) {
-                        wordScore = 3 * wordIntensity;
-                        positiveWords++;
-                    } else if (sentimentWords.positive.moderate.includes(word)) {
-                        wordScore = 2 * wordIntensity;
-                        positiveWords++;
-                    } else if (sentimentWords.positive.mild.includes(word)) {
-                        wordScore = 1 * wordIntensity;
-                        positiveWords++;
-                    } else if (sentimentWords.negative.strong.includes(word)) {
-                        wordScore = -3 * wordIntensity;
-                        negativeWords++;
-                    } else if (sentimentWords.negative.moderate.includes(word)) {
-                        wordScore = -2 * wordIntensity;
-                        negativeWords++;
-                    } else if (sentimentWords.negative.mild.includes(word)) {
-                        wordScore = -1 * wordIntensity;
-                        negativeWords++;
-                    } else {
-                        neutralWords++;
-                    }
-
-                    // Apply negation
-                    if (isNegated && wordScore !== 0) {
-                        wordScore = -wordScore * 0.8;
-                    }
-
-                    sentenceScore += wordScore;
-                }
-
-                // Normalize sentence score
-                const normalizedScore = sentenceScore / words.length;
-                
-                let sentimentClass, sentimentIcon, sentimentLabel, confidenceBar;
-                
-                if (normalizedScore > 0.1) {
-                    if (normalizedScore > 0.3) {
-                        sentimentClass = 'border-green-400 bg-green-100';
-                        sentimentIcon = '🤩';
-                        sentimentLabel = 'Very Positive';
-                        confidenceBar = 'bg-green-500';
-                    } else if (normalizedScore > 0.15) {
-                        sentimentClass = 'border-green-300 bg-green-50';
-                        sentimentIcon = '😊';
-                        sentimentLabel = 'Positive';
-                        confidenceBar = 'bg-green-400';
-                    } else {
-                        sentimentClass = 'border-green-200 bg-green-25';
-                        sentimentIcon = '🙂';
-                        sentimentLabel = 'Slightly Positive';
-                        confidenceBar = 'bg-green-300';
-                    }
-                } else if (normalizedScore < -0.1) {
-                    if (normalizedScore < -0.3) {
-                        sentimentClass = 'border-red-400 bg-red-100';
-                        sentimentIcon = '😡';
-                        sentimentLabel = 'Very Negative';
-                        confidenceBar = 'bg-red-500';
-                    } else if (normalizedScore < -0.15) {
-                        sentimentClass = 'border-red-300 bg-red-50';
-                        sentimentIcon = '😞';
-                        sentimentLabel = 'Negative';
-                        confidenceBar = 'bg-red-400';
-                    } else {
-                        sentimentClass = 'border-red-200 bg-red-25';
-                        sentimentIcon = '😕';
-                        sentimentLabel = 'Slightly Negative';
-                        confidenceBar = 'bg-red-300';
-                    }
-                } else {
-                    if (Math.abs(normalizedScore) < 0.05) {
-                        sentimentClass = 'border-gray-200 bg-gray-50';
-                        sentimentIcon = '😐';
-                        sentimentLabel = 'Neutral';
-                        confidenceBar = 'bg-gray-400';
-                    } else {
-                        sentimentClass = 'border-yellow-200 bg-yellow-50';
-                        sentimentIcon = '🤔';
-                        sentimentLabel = 'Mixed';
-                        confidenceBar = 'bg-yellow-400';
+    batchSentimentChart = new Chart(batchCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Positive', 'Negative', 'Neutral', 'Mixed'],
+            datasets: [{
+                data: [sentimentCounts.positive, sentimentCounts.negative, sentimentCounts.neutral, sentimentCounts.mixed],
+                backgroundColor: ['#10B981', '#EF4444', '#6B7280', '#F59E0B'],
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        font: { size: 11 }
                     }
                 }
+            }
+        }
+    });
 
-                const confidence = Math.min(100, Math.abs(normalizedScore) * 300);
-                
-                const div = document.createElement('div');
-                div.className = `p-4 rounded-lg border-2 ${sentimentClass}`;
-                div.innerHTML = `
-                    <div class="flex items-start gap-3">
-                        <span class="text-2xl">${sentimentIcon}</span>
-                        <div class="flex-1">
-                            <p class="text-gray-800">${trimmed}.</p>
-                            <div class="mt-3 flex items-center justify-between text-sm">
-                                <div class="flex gap-4">
-                                    <span class="font-medium">${sentimentLabel}</span>
-                                    <span class="text-gray-600">Score: ${normalizedScore.toFixed(2)}</span>
-                                    <span class="text-gray-600">Words: +${positiveWords} =${neutralWords} -${negativeWords}</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs text-gray-500">Confidence:</span>
-                                    <div class="w-16 h-2 bg-gray-200 rounded-full">
-                                        <div class="${confidenceBar} h-2 rounded-full" style="width: ${confidence}%"></div>
-                                    </div>
-                                    <span class="text-xs text-gray-500">${Math.round(confidence)}%</span>
-                                </div>
-                            </div>
-                        </div>
+
+}
+
+function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const content = e.target.result;
+        document.getElementById('batchTextInput').value = content;
+        document.getElementById('fileStatus').innerHTML = `
+                    <div class="bg-green-500/20 text-green-300 px-4 py-2 rounded-xl border border-green-500/30">
+                        ✅ File loaded: ${file.name}
                     </div>
                 `;
-                container.appendChild(div);
-            });
-        }
+    };
+    reader.readAsText(file);
+}
 
-        function updateChart(positive, neutral, negative) {
-            const ctx = document.getElementById('sentimentChart').getContext('2d');
-            
-            // Destroy existing chart if it exists
-            if (window.sentimentChartInstance) {
-                window.sentimentChartInstance.destroy();
+function loadBatchSample() {
+    const sampleBatch = `Amazing product! Love the quality and fast shipping.
+
+Terrible customer service. Very disappointed with this purchase.
+
+The item is okay, nothing special but does the job.
+
+Outstanding quality! Highly recommend to everyone.
+
+Poor packaging, item arrived damaged. Not happy.
+
+Average product for the price. Fair value.
+
+Excellent experience from start to finish!
+
+Worst purchase ever. Complete waste of money.
+
+Good product, meets expectations. Satisfied.
+
+Incredible service and amazing product quality!`;
+
+    document.getElementById('batchTextInput').value = sampleBatch;
+}
+
+function toggleExportMenu() {
+    const menu = document.getElementById('exportMenu');
+    menu.classList.toggle('hidden');
+}
+
+// Close export menu when clicking outside
+document.addEventListener('click', function (event) {
+    const exportBtn = document.getElementById('exportBtn');
+    const exportMenu = document.getElementById('exportMenu');
+    if (exportBtn && !exportBtn.contains(event.target)) {
+        exportMenu.classList.add('hidden');
+    }
+});
+
+function exportBatchResults(format = 'csv') {
+    if (batchResults.length === 0) {
+        alert('No batch results to export!');
+        return;
+    }
+
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+
+    switch (format) {
+        case 'csv':
+            exportCSV(timestamp);
+            break;
+        case 'json':
+            exportJSON(timestamp);
+            break;
+        case 'pdf':
+            exportPDF(timestamp);
+            break;
+        case 'docx':
+            exportDOCX(timestamp);
+            break;
+        case 'html':
+            exportHTML(timestamp);
+            break;
+    }
+}
+
+function exportCSV(timestamp) {
+    const csvContent = [
+        ['ID', 'Text', 'Sentiment', 'Confidence (%)', 'Positive Score', 'Negative Score', 'Neutral Score', 'Total Words', 'Sentiment Words', 'Positive Words Found', 'Negative Words Found', 'Neutral Words Found'],
+        ...batchResults.map(result => [
+            result.id,
+            `"${result.text.replace(/"/g, '""')}"`,
+            result.analysis.overall,
+            result.analysis.confidence,
+            result.analysis.scores.positive,
+            result.analysis.scores.negative,
+            result.analysis.scores.neutral,
+            result.analysis.metrics.totalWords,
+            result.analysis.metrics.sentimentWords,
+            `"${result.analysis.words.positive.join(', ')}"`,
+            `"${result.analysis.words.negative.join(', ')}"`,
+            `"${result.analysis.words.neutral.join(', ')}"`,
+        ])
+    ].map(row => row.join(',')).join('\n');
+
+    downloadFile(csvContent, `sentiment_analysis_${timestamp}.csv`, 'text/csv');
+}
+
+function exportJSON(timestamp) {
+    const jsonData = {
+        exportInfo: {
+            timestamp: new Date().toISOString(),
+            totalAnalyzed: batchResults.length,
+            exportFormat: 'JSON'
+        },
+        summary: {
+            totalTexts: batchResults.length,
+            positiveCount: batchResults.filter(r => r.analysis.overall === 'Positive').length,
+            negativeCount: batchResults.filter(r => r.analysis.overall === 'Negative').length,
+            neutralCount: batchResults.filter(r => r.analysis.overall === 'Neutral').length,
+            mixedCount: batchResults.filter(r => r.analysis.overall === 'Mixed').length
+        },
+        chartData: {
+            sentimentDistribution: {
+                positive: batchResults.filter(r => r.analysis.overall === 'Positive').length,
+                negative: batchResults.filter(r => r.analysis.overall === 'Negative').length,
+                neutral: batchResults.filter(r => r.analysis.overall === 'Neutral').length,
+                mixed: batchResults.filter(r => r.analysis.overall === 'Mixed').length
             }
+        },
+        results: batchResults.map(result => ({
+            id: result.id,
+            text: result.text,
+            sentiment: {
+                overall: result.analysis.overall,
+                confidence: result.analysis.confidence,
+                emoji: result.analysis.emoji
+            },
+            scores: result.analysis.scores,
+            percentages: result.analysis.percentages,
+            words: result.analysis.words,
+            metrics: result.analysis.metrics
+        }))
+    };
 
-            window.sentimentChartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Positive', 'Neutral', 'Negative'],
-                    datasets: [{
-                        data: [positive, neutral, negative],
-                        backgroundColor: ['#10B981', '#6B7280', '#EF4444'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 20,
-                                usePointStyle: true
-                            }
-                        }
-                    }
-                }
-            });
+    const jsonString = JSON.stringify(jsonData, null, 2);
+    downloadFile(jsonString, `sentiment_analysis_${timestamp}.json`, 'application/json');
+}
+
+async function exportPDF(timestamp) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(20);
+    doc.setTextColor(75, 85, 99);
+    doc.text('🎭 Sentiment Analysis Report', 20, 30);
+
+    // Subtitle
+    doc.setFontSize(12);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, 40);
+    doc.text(`Total Texts Analyzed: ${batchResults.length}`, 20, 50);
+
+    // Summary Section
+    doc.setFontSize(16);
+    doc.setTextColor(75, 85, 99);
+    doc.text('📊 Summary', 20, 70);
+
+    const positiveCount = batchResults.filter(r => r.analysis.overall === 'Positive').length;
+    const negativeCount = batchResults.filter(r => r.analysis.overall === 'Negative').length;
+    const neutralCount = batchResults.filter(r => r.analysis.overall === 'Neutral').length;
+    const mixedCount = batchResults.filter(r => r.analysis.overall === 'Mixed').length;
+
+    doc.setFontSize(12);
+    doc.setTextColor(34, 197, 94); // Green
+    doc.text(`😊 Positive: ${positiveCount} (${Math.round(positiveCount / batchResults.length * 100)}%)`, 30, 85);
+
+    doc.setTextColor(239, 68, 68); // Red
+    doc.text(`😞 Negative: ${negativeCount} (${Math.round(negativeCount / batchResults.length * 100)}%)`, 30, 95);
+
+    doc.setTextColor(107, 114, 128); // Gray
+    doc.text(`😐 Neutral: ${neutralCount} (${Math.round(neutralCount / batchResults.length * 100)}%)`, 30, 105);
+    doc.text(`🤔 Mixed: ${mixedCount} (${Math.round(mixedCount / batchResults.length * 100)}%)`, 30, 115);
+
+    // Chart Section
+    doc.setFontSize(16);
+    doc.setTextColor(75, 85, 99);
+    doc.text('📈 Distribution Chart', 20, 135);
+
+    // Add chart as image
+    try {
+        const chartCanvas = document.getElementById('batchSentimentChart');
+        if (chartCanvas) {
+            const chartImage = chartCanvas.toDataURL('image/png');
+            doc.addImage(chartImage, 'PNG', 20, 145, 80, 60);
         }
+    } catch (error) {
+        doc.setFontSize(10);
+        doc.setTextColor(239, 68, 68);
+        doc.text('Chart could not be exported', 20, 155);
+    }
+
+    // Individual Results Section
+    doc.setFontSize(16);
+    doc.setTextColor(75, 85, 99);
+    doc.text('📋 Individual Results', 20, 220);
+
+    let yPosition = 235;
+    const pageHeight = doc.internal.pageSize.height;
+
+    batchResults.slice(0, 10).forEach((result, index) => {
+        if (yPosition > pageHeight - 40) {
+            doc.addPage();
+            yPosition = 30;
+        }
+
+        doc.setFontSize(12);
+        doc.setTextColor(75, 85, 99);
+        doc.text(`#${result.id}: ${result.analysis.emoji} ${result.analysis.overall} (${result.analysis.confidence}%)`, 20, yPosition);
+
+        doc.setFontSize(10);
+        doc.setTextColor(107, 114, 128);
+        const textPreview = result.text.length > 80 ? result.text.substring(0, 80) + '...' : result.text;
+        const lines = doc.splitTextToSize(textPreview, 170);
+        doc.text(lines, 20, yPosition + 8);
+
+        yPosition += 20 + (lines.length * 4);
+    });
+
+    if (batchResults.length > 10) {
+        doc.setFontSize(10);
+        doc.setTextColor(107, 114, 128);
+        doc.text(`... and ${batchResults.length - 10} more results`, 20, yPosition + 10);
+    }
+
+    // Footer
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(107, 114, 128);
+        doc.text(`Generated by Sentiment Wizard - Page ${i} of ${totalPages}`, 20, pageHeight - 10);
+    }
+
+    doc.save(`sentiment_analysis_report_${timestamp}.pdf`);
+}
+
+function exportDOCX(timestamp) {
+    // Create DOCX content using HTML structure that can be opened by Word
+    const positiveCount = batchResults.filter(r => r.analysis.overall === 'Positive').length;
+    const negativeCount = batchResults.filter(r => r.analysis.overall === 'Negative').length;
+    const neutralCount = batchResults.filter(r => r.analysis.overall === 'Neutral').length;
+    const mixedCount = batchResults.filter(r => r.analysis.overall === 'Mixed').length;
+
+    const docxContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Sentiment Analysis Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        h1 { color: #4c63d2; text-align: center; border-bottom: 3px solid #4c63d2; padding-bottom: 10px; }
+        h2 { color: #5a4fcf; margin-top: 30px; }
+        h3 { color: #666; }
+        .summary { background: #f8f9ff; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        .result-item { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .positive { border-left: 5px solid #10B981; background: #f0fdf4; }
+        .negative { border-left: 5px solid #EF4444; background: #fef2f2; }
+        .neutral { border-left: 5px solid #6B7280; background: #f9fafb; }
+        .mixed { border-left: 5px solid #F59E0B; background: #fffbeb; }
+        .stats { display: flex; justify-content: space-around; margin: 20px 0; }
+        .stat-box { text-align: center; padding: 15px; background: #f1f5f9; border-radius: 8px; }
+        .confidence { font-weight: bold; color: #4c63d2; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #4c63d2; color: white; }
+        .word-list { font-style: italic; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>🎭 Sentiment Analysis Report</h1>
+    
+    <div class="summary">
+        <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+        <p><strong>Total Texts Analyzed:</strong> ${batchResults.length}</p>
+        <p><strong>Analysis Method:</strong> AI-Powered Sentiment Detection</p>
+    </div>
+
+    <h2>📊 Executive Summary</h2>
+    <div class="stats">
+        <div class="stat-box">
+            <h3>😊 Positive</h3>
+            <p><strong>${positiveCount}</strong> (${Math.round(positiveCount / batchResults.length * 100)}%)</p>
+        </div>
+        <div class="stat-box">
+            <h3>😞 Negative</h3>
+            <p><strong>${negativeCount}</strong> (${Math.round(negativeCount / batchResults.length * 100)}%)</p>
+        </div>
+        <div class="stat-box">
+            <h3>😐 Neutral</h3>
+            <p><strong>${neutralCount}</strong> (${Math.round(neutralCount / batchResults.length * 100)}%)</p>
+        </div>
+        <div class="stat-box">
+            <h3>🤔 Mixed</h3>
+            <p><strong>${mixedCount}</strong> (${Math.round(mixedCount / batchResults.length * 100)}%)</p>
+        </div>
+    </div>
+
+    <h2>📋 Detailed Analysis Results</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Text Preview</th>
+                <th>Sentiment</th>
+                <th>Confidence</th>
+                <th>Scores (P/N/Neu)</th>
+                <th>Key Words</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${batchResults.map(result => `
+            <tr class="${result.analysis.overall.toLowerCase()}">
+                <td>${result.id}</td>
+                <td>${result.text.length > 100 ? result.text.substring(0, 100) + '...' : result.text}</td>
+                <td>${result.analysis.emoji} ${result.analysis.overall}</td>
+                <td class="confidence">${result.analysis.confidence}%</td>
+                <td>${result.analysis.scores.positive}/${result.analysis.scores.negative}/${result.analysis.scores.neutral}</td>
+                <td class="word-list">
+                    ${[...result.analysis.words.positive.slice(0, 3), ...result.analysis.words.negative.slice(0, 3)].join(', ') || 'No key words'}
+                </td>
+            </tr>
+            `).join('')}
+        </tbody>
+    </table>
+
+    <h2>📈 Analysis Insights</h2>
+    <div class="summary">
+        <h3>Overall Sentiment Trend</h3>
+        <p>The batch analysis reveals a <strong>${positiveCount > negativeCount ? 'predominantly positive' : negativeCount > positiveCount ? 'predominantly negative' : 'balanced'}</strong> sentiment pattern across all analyzed texts.</p>
+        
+        <h3>Key Findings</h3>
+        <ul>
+            <li><strong>Dominant Sentiment:</strong> ${positiveCount >= Math.max(negativeCount, neutralCount, mixedCount) ? 'Positive' : negativeCount >= Math.max(positiveCount, neutralCount, mixedCount) ? 'Negative' : 'Neutral/Mixed'}</li>
+            <li><strong>Sentiment Distribution:</strong> ${Math.round((Math.max(positiveCount, negativeCount, neutralCount + mixedCount) / batchResults.length) * 100)}% of texts share the dominant sentiment</li>
+            <li><strong>Analysis Confidence:</strong> Average confidence level across all results</li>
+        </ul>
+    </div>
+
+    <footer style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 12px;">
+        <p>Generated by Sentiment Wizard - Advanced AI Sentiment Analysis Tool</p>
+        <p>Report created on ${new Date().toLocaleString()}</p>
+    </footer>
+</body>
+</html>`;
+
+    downloadFile(docxContent, `sentiment_analysis_report_${timestamp}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+}
+
+function exportHTML(timestamp) {
+    const positiveCount = batchResults.filter(r => r.analysis.overall === 'Positive').length;
+    const negativeCount = batchResults.filter(r => r.analysis.overall === 'Negative').length;
+    const neutralCount = batchResults.filter(r => r.analysis.overall === 'Neutral').length;
+    const mixedCount = batchResults.filter(r => r.analysis.overall === 'Mixed').length;
+
+    // Get chart data as base64 image
+    let chartImageData = '';
+    try {
+        const chartCanvas = document.getElementById('batchSentimentChart');
+        if (chartCanvas) {
+            chartImageData = chartCanvas.toDataURL('image/png');
+        }
+    } catch (error) {
+        console.log('Chart export not available');
+    }
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentiment Analysis Report - ${new Date().toLocaleDateString()}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #4c63d2 0%, #5a4fcf 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { 
+            background: rgba(255,255,255,0.95); 
+            padding: 40px; 
+            border-radius: 20px; 
+            text-align: center; 
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        .header h1 { 
+            font-size: 3rem; 
+            color: #4c63d2; 
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        .header p { color: #666; font-size: 1.2rem; }
+        .summary-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 20px; 
+            margin: 30px 0; 
+        }
+        .summary-card { 
+            background: rgba(255,255,255,0.95); 
+            padding: 30px; 
+            border-radius: 15px; 
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .summary-card:hover { transform: translateY(-5px); }
+        .summary-card h3 { font-size: 2.5rem; margin-bottom: 10px; }
+        .summary-card .number { font-size: 2rem; font-weight: bold; color: #4c63d2; }
+        .summary-card .percentage { color: #666; font-size: 1.1rem; }
+        .chart-section { 
+            background: rgba(255,255,255,0.95); 
+            padding: 40px; 
+            border-radius: 20px; 
+            margin: 30px 0;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        .chart-section h2 { color: #4c63d2; margin-bottom: 20px; text-align: center; }
+        .chart-container { text-align: center; margin: 20px 0; }
+        .chart-container img { max-width: 100%; height: auto; border-radius: 10px; }
+        .results-section { 
+            background: rgba(255,255,255,0.95); 
+            padding: 40px; 
+            border-radius: 20px; 
+            margin: 30px 0;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        .results-grid { 
+            display: grid; 
+            gap: 20px; 
+            margin-top: 20px; 
+        }
+        .result-item { 
+            padding: 25px; 
+            border-radius: 15px; 
+            border-left: 5px solid;
+            transition: transform 0.2s ease;
+        }
+        .result-item:hover { transform: translateX(5px); }
+        .result-item.positive { border-color: #10B981; background: linear-gradient(135deg, #f0fdf4, #dcfce7); }
+        .result-item.negative { border-color: #EF4444; background: linear-gradient(135deg, #fef2f2, #fee2e2); }
+        .result-item.neutral { border-color: #6B7280; background: linear-gradient(135deg, #f9fafb, #f3f4f6); }
+        .result-item.mixed { border-color: #F59E0B; background: linear-gradient(135deg, #fffbeb, #fef3c7); }
+        .result-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 15px; 
+        }
+        .result-id { font-weight: bold; color: #4c63d2; }
+        .sentiment-badge { 
+            padding: 8px 16px; 
+            border-radius: 25px; 
+            font-weight: bold; 
+            color: white;
+            background: linear-gradient(135deg, #4c63d2, #5a4fcf);
+        }
+        .result-text { 
+            font-size: 1.1rem; 
+            margin-bottom: 15px; 
+            color: #444;
+        }
+        .word-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+        .word-tag { 
+            padding: 4px 12px; 
+            border-radius: 20px; 
+            font-size: 0.9rem; 
+            font-weight: 500;
+        }
+        .word-tag.positive { background: #dcfce7; color: #166534; }
+        .word-tag.negative { background: #fee2e2; color: #991b1b; }
+        .word-tag.neutral { background: #f3f4f6; color: #374151; }
+        .insights { 
+            background: linear-gradient(135deg, #e0e7ff, #c7d2fe); 
+            padding: 30px; 
+            border-radius: 15px; 
+            margin: 30px 0;
+        }
+        .insights h3 { color: #4c63d2; margin-bottom: 15px; }
+        .insights ul { margin-left: 20px; }
+        .insights li { margin-bottom: 8px; }
+        .footer { 
+            text-align: center; 
+            padding: 30px; 
+            color: rgba(255,255,255,0.8); 
+            margin-top: 50px;
+        }
+        .interactive-note {
+            background: rgba(255,255,255,0.1);
+            border: 2px dashed rgba(255,255,255,0.3);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            color: white;
+            margin: 20px 0;
+        }
+        @media (max-width: 768px) {
+            .container { padding: 10px; }
+            .header h1 { font-size: 2rem; }
+            .summary-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎭 Sentiment Analysis Report</h1>
+            <p>Generated on ${new Date().toLocaleString()}</p>
+            <p><strong>${batchResults.length}</strong> texts analyzed with AI-powered sentiment detection</p>
+        </div>
+
+        <div class="summary-grid">
+            <div class="summary-card">
+                <h3>😊</h3>
+                <div class="number">${positiveCount}</div>
+                <div class="percentage">${Math.round(positiveCount / batchResults.length * 100)}% Positive</div>
+            </div>
+            <div class="summary-card">
+                <h3>😞</h3>
+                <div class="number">${negativeCount}</div>
+                <div class="percentage">${Math.round(negativeCount / batchResults.length * 100)}% Negative</div>
+            </div>
+            <div class="summary-card">
+                <h3>😐</h3>
+                <div class="number">${neutralCount}</div>
+                <div class="percentage">${Math.round(neutralCount / batchResults.length * 100)}% Neutral</div>
+            </div>
+            <div class="summary-card">
+                <h3>🤔</h3>
+                <div class="number">${mixedCount}</div>
+                <div class="percentage">${Math.round(mixedCount / batchResults.length * 100)}% Mixed</div>
+            </div>
+        </div>
+
+        ${chartImageData ? `
+        <div class="chart-section">
+            <h2>📊 Sentiment Distribution</h2>
+            <div class="chart-container">
+                <img src="${chartImageData}" alt="Sentiment Distribution Chart" />
+            </div>
+        </div>
+        ` : `
+        <div class="interactive-note">
+            <h3>📊 Interactive Chart Available</h3>
+            <p>The full interactive sentiment distribution chart is available in the original Sentiment Wizard application.</p>
+        </div>
+        `}
+
+        <div class="insights">
+            <h3>📈 Key Insights</h3>
+            <ul>
+                <li><strong>Overall Trend:</strong> ${positiveCount > negativeCount ? 'Predominantly positive sentiment detected' : negativeCount > positiveCount ? 'Predominantly negative sentiment detected' : 'Balanced sentiment distribution'}</li>
+                <li><strong>Dominant Category:</strong> ${positiveCount >= Math.max(negativeCount, neutralCount, mixedCount) ? 'Positive' : negativeCount >= Math.max(positiveCount, neutralCount, mixedCount) ? 'Negative' : 'Neutral/Mixed'} sentiment leads with ${Math.round((Math.max(positiveCount, negativeCount, neutralCount + mixedCount) / batchResults.length) * 100)}% of texts</li>
+                <li><strong>Sentiment Diversity:</strong> ${batchResults.length > 10 ? 'Large sample size provides reliable sentiment analysis' : 'Focused analysis on key texts'}</li>
+                <li><strong>Analysis Quality:</strong> AI-powered detection with confidence scoring for each result</li>
+            </ul>
+        </div>
+
+        <div class="results-section">
+            <h2>📋 Individual Analysis Results</h2>
+            <div class="results-grid">
+                ${batchResults.map(result => `
+                <div class="result-item ${result.analysis.overall.toLowerCase()}">
+                    <div class="result-header">
+                        <span class="result-id">Analysis #${result.id}</span>
+                        <span class="sentiment-badge">
+                            ${result.analysis.emoji} ${result.analysis.overall} (${result.analysis.confidence}%)
+                        </span>
+                    </div>
+                    <div class="result-text">
+                        "${result.text.length > 200 ? result.text.substring(0, 200) + '...' : result.text}"
+                    </div>
+                    <div class="word-tags">
+                        ${result.analysis.words.positive.slice(0, 3).map(word => `<span class="word-tag positive">+${word}</span>`).join('')}
+                        ${result.analysis.words.negative.slice(0, 3).map(word => `<span class="word-tag negative">-${word}</span>`).join('')}
+                        ${result.analysis.words.neutral.slice(0, 2).map(word => `<span class="word-tag neutral">${word}</span>`).join('')}
+                    </div>
+                </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>🎭 Generated by Sentiment Wizard</p>
+            <p>Advanced AI-Powered Sentiment Analysis Tool</p>
+            <p>Report created: ${new Date().toLocaleString()}</p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+    downloadFile(htmlContent, `sentiment_analysis_report_${timestamp}.html`, 'text/html');
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+function clearAll() {
+    document.getElementById('textInput').value = '';
+    document.getElementById('batchTextInput').value = '';
+    document.getElementById('resultsSection').classList.add('hidden');
+    document.getElementById('batchResultsSection').classList.add('hidden');
+    document.getElementById('fileStatus').innerHTML = '';
+    batchResults = [];
+
+    // Destroy all charts
+    [sentimentChart, intensityChart, wordFrequencyChart, batchSentimentChart].forEach(chart => {
+        if (chart) {
+            chart.destroy();
+        }
+    });
+    sentimentChart = intensityChart = wordFrequencyChart = batchSentimentChart = null;
+}
 
