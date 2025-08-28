@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentiment Analysis Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-shadow { box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .pulse-animation { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .progress-bar {
+            transition: width 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <div class="gradient-bg text-white py-8">
+        <div class="max-w-7xl mx-auto px-6">
+            <h1 class="text-4xl font-bold mb-2">📊 Sentiment Analysis Dashboard</h1>
+            <p class="text-xl opacity-90">Analyze emotional tone in text content with AI-powered insights</p>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Analysis Mode Selector -->
+        <div class="bg-white rounded-xl card-shadow p-6 mb-8">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">🎯 Analysis Mode</h2>
+            <div class="flex gap-4 mb-6">
+                <button onclick="switchMode('single')" id="singleModeBtn"
+                    class="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2">
+                    📝 Single Text Analysis
+                </button>
+                <button onclick="switchMode('batch')" id="batchModeBtn"
+                    class="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors hover:bg-gray-400 flex items-center gap-2">
+                    📊 Batch Processing
+                </button>
+            </div>
+        </div>
+
+        <!-- Single Text Analysis Section -->
+        <div id="singleAnalysisSection" class="bg-white rounded-xl card-shadow p-6 mb-8">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">📝 Text Analysis</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Choose input method:</label>
+                        <div class="flex gap-2 mb-4">
+                            <button onclick="switchInputMethod('text')" id="textMethodBtn"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium transition-colors">
+                                ✏️ Direct Entry
+                            </button>
+                            <button onclick="switchInputMethod('file')" id="fileMethodBtn"
+                                class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors hover:bg-gray-400">
+                                📁 File Upload
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Direct Text Entry -->
+                    <div id="textInputSection">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Enter text to analyze:</label>
+                        <textarea id="textInput" 
+                            class="w-full h-32 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                            placeholder="Paste customer reviews, social media posts, or any text content here..."></textarea>
+                    </div>
+
+                    <!-- File Upload Section -->
+                    <div id="fileInputSection" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Upload text file:</label>
+                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                            <input type="file" id="fileInput" accept=".txt,.csv,.json" class="hidden" onchange="handleFileUpload(event)">
+                            <div onclick="document.getElementById('fileInput').click()" class="cursor-pointer">
+                                <div class="text-4xl mb-2">📄</div>
+                                <p class="text-gray-600 mb-2">Click to upload or drag and drop</p>
+                                <p class="text-sm text-gray-500">Supports .txt, .csv, .json files</p>
+                            </div>
+                        </div>
+                        <div id="fileInfo" class="hidden mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <div class="flex items-center gap-2">
+                                <span class="text-blue-600">📎</span>
+                                <span id="fileName" class="font-medium text-blue-800"></span>
+                                <span id="fileSize" class="text-sm text-blue-600"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3 mt-4">
+                        <button onclick="analyzeSentiment()" 
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                            🔍 Analyze Sentiment
+                        </button>
+                        <button onclick="loadSample()" 
+                            class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                            📋 Load Sample
+                        </button>
+                        <button onclick="clearAll()" 
+                            class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                            🗑️ Clear
+                        </button>
+                    </div>
+                    
+                    <!-- Export Options -->
+                    <div id="exportOptions" class="hidden mt-4 p-4 bg-gray-50 rounded-lg border">
+                        <h4 class="font-medium text-gray-800 mb-3">📥 Export Analysis Results</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="exportResults('csv')" 
+                                class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                                📊 Export CSV
+                            </button>
+                            <button onclick="exportResults('json')" 
+                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                                📋 Export JSON
+                            </button>
+                            <button onclick="exportResults('pdf')" 
+                                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                                📄 Export PDF
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-600 mt-2">Export includes detailed analysis, confidence scores, and keyword breakdown</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Quick Analysis Templates:</label>
+                    <div class="space-y-2">
+                        <button onclick="loadTemplate('review')" 
+                            class="w-full text-left p-3 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors">
+                            🛍️ Customer Review Analysis
+                        </button>
+                        <button onclick="loadTemplate('social')" 
+                            class="w-full text-left p-3 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors">
+                            📱 Social Media Post Analysis
+                        </button>
+                        <button onclick="loadTemplate('feedback')" 
+                            class="w-full text-left p-3 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors">
+                            💬 Employee Feedback Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Batch Processing Section -->
+        <div id="batchProcessingSection" class="hidden">
+            <!-- Batch Input -->
+            <div class="bg-white rounded-xl card-shadow p-6 mb-8">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800">📊 Batch Processing Setup</h2>
+                
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-800 mb-3">📥 Input Methods</h3>
+                        <div class="space-y-4">
+                            <!-- Manual Text Entry -->
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <h4 class="font-medium text-gray-700 mb-2">✏️ Manual Entry</h4>
+                                <textarea id="batchTextInput" 
+                                    class="w-full h-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none text-sm"
+                                    placeholder="Enter multiple texts, one per line or separated by blank lines..."></textarea>
+                                <button onclick="addBatchTexts()" 
+                                    class="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                                    ➕ Add to Batch
+                                </button>
+                            </div>
+
+                            <!-- File Upload for Batch -->
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <h4 class="font-medium text-gray-700 mb-2">📁 File Upload</h4>
+                                <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                                    <input type="file" id="batchFileInput" accept=".txt,.csv,.json" class="hidden" onchange="handleBatchFileUpload(event)">
+                                    <div onclick="document.getElementById('batchFileInput').click()" class="cursor-pointer">
+                                        <div class="text-2xl mb-1">📄</div>
+                                        <p class="text-sm text-gray-600">Upload batch file</p>
+                                        <p class="text-xs text-gray-500">CSV, JSON, or line-separated TXT</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Sample Data -->
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <h4 class="font-medium text-gray-700 mb-2">🎯 Sample Datasets</h4>
+                                <div class="space-y-2">
+                                    <button onclick="loadBatchSample('reviews')" 
+                                        class="w-full text-left p-2 bg-blue-50 hover:bg-blue-100 rounded text-sm border border-blue-200 transition-colors">
+                                        🛍️ Customer Reviews (5 samples)
+                                    </button>
+                                    <button onclick="loadBatchSample('social')" 
+                                        class="w-full text-left p-2 bg-green-50 hover:bg-green-100 rounded text-sm border border-green-200 transition-colors">
+                                        📱 Social Media Posts (6 samples)
+                                    </button>
+                                    <button onclick="loadBatchSample('feedback')" 
+                                        class="w-full text-left p-2 bg-purple-50 hover:bg-purple-100 rounded text-sm border border-purple-200 transition-colors">
+                                        💬 Employee Feedback (4 samples)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-800 mb-3">📋 Batch Queue</h3>
+                        <div class="border border-gray-200 rounded-lg p-4 h-80 overflow-y-auto">
+                            <div id="batchQueue" class="space-y-2">
+                                <div class="text-center text-gray-500 py-8">
+                                    <div class="text-4xl mb-2">📝</div>
+                                    <p>No texts in batch queue</p>
+                                    <p class="text-sm">Add texts to start batch processing</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 flex gap-2">
+                            <button onclick="processBatch()" id="processBatchBtn"
+                                class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+                                🚀 Process Batch
+                            </button>
+                            <button onclick="clearBatch()" 
+                                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
+                                🗑️ Clear
+                            </button>
+                        </div>
+                        
+                        <div id="batchProgress" class="hidden mt-4">
+                            <div class="flex items-center justify-between text-sm text-gray-600 mb-2">
+                                <span>Processing...</span>
+                                <span id="progressText">0 / 0</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="progressBar" class="bg-blue-500 h-2 rounded-full progress-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch Results -->
+            <div id="batchResults" class="hidden">
+                <!-- Batch Overview -->
+                <div class="bg-white rounded-xl card-shadow p-6 mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">📈 Batch Analysis Overview</h2>
+                    
+                    <div class="grid md:grid-cols-4 gap-6 mb-6">
+                        <div class="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <div class="text-3xl font-bold text-blue-600" id="totalProcessed">0</div>
+                            <div class="text-sm text-gray-600">Texts Processed</div>
+                        </div>
+                        <div class="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                            <div class="text-3xl font-bold text-green-600" id="avgPositive">0%</div>
+                            <div class="text-sm text-gray-600">Avg Positive</div>
+                        </div>
+                        <div class="text-center p-4 bg-red-50 rounded-lg border border-red-200">
+                            <div class="text-3xl font-bold text-red-600" id="avgNegative">0%</div>
+                            <div class="text-sm text-gray-600">Avg Negative</div>
+                        </div>
+                        <div class="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div class="text-3xl font-bold text-gray-600" id="avgConfidence">0%</div>
+                            <div class="text-sm text-gray-600">Avg Confidence</div>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-3">📊 Sentiment Distribution</h3>
+                            <canvas id="batchSentimentChart" width="400" height="300"></canvas>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-3">🎯 Confidence Distribution</h3>
+                            <canvas id="batchConfidenceChart" width="400" height="300"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Batch Insights -->
+                <div class="bg-white rounded-xl card-shadow p-6 mb-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">🔍 Batch Insights</h2>
+                    <div id="batchInsights" class="grid md:grid-cols-2 gap-6">
+                        <!-- Insights will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Individual Results -->
+                <div class="bg-white rounded-xl card-shadow p-6 mb-8">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-2xl font-semibold text-gray-800">📋 Individual Results</h2>
+                        <div class="flex gap-2">
+                            <select id="sortBy" onchange="sortBatchResults()" 
+                                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="index">Original Order</option>
+                                <option value="confidence">Confidence (High to Low)</option>
+                                <option value="positive">Most Positive First</option>
+                                <option value="negative">Most Negative First</option>
+                                <option value="length">Text Length</option>
+                            </select>
+                            <button onclick="exportBatchResults()" 
+                                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                                📥 Export Results
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="batchResultsList" class="space-y-4">
+                        <!-- Individual results will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Single Analysis Results Section -->
+        <div id="resultsSection" class="hidden">
+            <!-- Overall Sentiment -->
+            <div class="grid md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-xl card-shadow p-6 text-center">
+                    <div id="overallSentiment" class="text-6xl mb-3">😊</div>
+                    <h3 class="text-xl font-semibold text-gray-800 mb-2">Overall Sentiment</h3>
+                    <div id="sentimentLabel" class="text-2xl font-bold text-green-600">Positive</div>
+                    <div id="confidenceScore" class="text-sm text-gray-600 mt-2">Confidence: 85%</div>
+                </div>
+                
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">📈 Sentiment Breakdown</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-green-600 font-medium">😊 Positive</span>
+                            <span id="positivePercent" class="font-bold">65%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="positiveBar" class="bg-green-500 h-2 rounded-full" style="width: 65%"></div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600 font-medium">😐 Neutral</span>
+                            <span id="neutralPercent" class="font-bold">20%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="neutralBar" class="bg-gray-500 h-2 rounded-full" style="width: 20%"></div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-red-600 font-medium">😞 Negative</span>
+                            <span id="negativePercent" class="font-bold">15%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="negativeBar" class="bg-red-500 h-2 rounded-full" style="width: 15%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">🎯 Key Metrics</h3>
+                    <div class="space-y-4">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Word Count:</span>
+                            <span id="wordCount" class="font-semibold">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Sentences:</span>
+                            <span id="sentenceCount" class="font-semibold">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Avg. Sentiment:</span>
+                            <span id="avgSentiment" class="font-semibold">+0.45</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Emotional Intensity:</span>
+                            <span id="intensity" class="font-semibold">Medium</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Analysis -->
+            <div class="grid md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 Sentiment Distribution</h3>
+                    <canvas id="sentimentChart" width="400" height="300"></canvas>
+                </div>
+
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">🎯 Confidence Scoring</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-medium text-gray-700">Overall Confidence</span>
+                                <span id="overallConfidence" class="text-sm font-bold text-blue-600">85%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div id="overallConfidenceBar" class="bg-blue-500 h-3 rounded-full transition-all duration-500" style="width: 85%"></div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-medium text-green-700">Positive Confidence</span>
+                                <span id="positiveConfidence" class="text-sm font-bold text-green-600">78%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="positiveConfidenceBar" class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: 78%"></div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-medium text-gray-700">Neutral Confidence</span>
+                                <span id="neutralConfidence" class="text-sm font-bold text-gray-600">65%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="neutralConfidenceBar" class="bg-gray-500 h-2 rounded-full transition-all duration-500" style="width: 65%"></div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-medium text-red-700">Negative Confidence</span>
+                                <span id="negativeConfidence" class="text-sm font-bold text-red-600">72%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="negativeConfidenceBar" class="bg-red-500 h-2 rounded-full transition-all duration-500" style="width: 72%"></div>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-gray-200">
+                            <div class="text-xs text-gray-600 space-y-1">
+                                <div class="flex justify-between">
+                                    <span>Sentiment Density:</span>
+                                    <span id="sentimentDensity" class="font-medium">24%</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>Word Coverage:</span>
+                                    <span id="wordCoverage" class="font-medium">67%</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>Consistency Score:</span>
+                                    <span id="consistencyScore" class="font-medium">0.82</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">🔍 Key Insights</h3>
+                    <div id="insights" class="space-y-3">
+                        <!-- Insights will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sentiment Explanation Section -->
+            <div class="bg-white rounded-xl card-shadow p-6 mb-8">
+                <h3 class="text-xl font-semibold text-gray-800 mb-6">🧠 Why This Score? - Detailed Explanation</h3>
+                
+                <!-- Score Breakdown -->
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h4 class="font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                            🎯 Score Calculation Breakdown
+                        </h4>
+                        <div id="scoreBreakdown" class="space-y-2 text-sm">
+                            <!-- Score breakdown will be populated here -->
+                        </div>
+                    </div>
+                    
+                    <div class="p-4 bg-green-50 rounded-lg border border-green-200">
+                        <h4 class="font-semibold text-green-800 mb-3 flex items-center gap-2">
+                            📊 Classification Logic
+                        </h4>
+                        <div id="classificationLogic" class="space-y-2 text-sm">
+                            <!-- Classification logic will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Key Factors -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-medium text-gray-800 mb-3">🔑 Key Factors Influencing This Score</h4>
+                    <div id="keyFactors" class="grid md:grid-cols-3 gap-4">
+                        <!-- Key factors will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Word-by-Word Analysis -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-medium text-gray-800 mb-3">🔍 Word-by-Word Impact Analysis</h4>
+                    <div class="mb-3 text-sm text-gray-600">
+                        Click on any word below to see its detailed contribution to the sentiment score:
+                    </div>
+                    <div id="wordByWordAnalysis" class="p-4 bg-gray-50 rounded-lg border leading-relaxed">
+                        <!-- Word-by-word analysis will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Confidence Explanation -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-medium text-gray-800 mb-3">🎯 Confidence Score Explanation</h4>
+                    <div id="confidenceExplanation" class="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <!-- Confidence explanation will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Alternative Interpretations -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-medium text-gray-800 mb-3">🤔 Alternative Interpretations</h4>
+                    <div id="alternativeInterpretations" class="space-y-3">
+                        <!-- Alternative interpretations will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keyword Extraction & Sentiment Drivers -->
+            <div class="bg-white rounded-xl card-shadow p-6 mb-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-semibold text-gray-800">🔍 Sentiment Driver Analysis</h3>
+                    <div class="flex gap-2">
+                        <button onclick="toggleKeywordView('impact')" id="impactViewBtn" 
+                            class="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg font-medium transition-colors">
+                            Impact View
+                        </button>
+                        <button onclick="toggleKeywordView('frequency')" id="frequencyViewBtn"
+                            class="px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded-lg font-medium transition-colors hover:bg-gray-400">
+                            Frequency View
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Top Sentiment Drivers -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-medium text-gray-800 mb-3">🎯 Top Sentiment Drivers</h4>
+                    <div id="topDrivers" class="grid md:grid-cols-2 gap-4">
+                        <!-- Top drivers will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Keyword Categories -->
+                <div class="grid md:grid-cols-4 gap-6 mb-6">
+                    <div>
+                        <h4 class="font-medium text-green-600 mb-3 flex items-center gap-2">
+                            😊 Positive Drivers
+                            <span id="positiveDriverCount" class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">0</span>
+                        </h4>
+                        <div id="positiveDrivers" class="space-y-2">
+                            <!-- Positive drivers will be populated here -->
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-red-600 mb-3 flex items-center gap-2">
+                            😞 Negative Drivers
+                            <span id="negativeDriverCount" class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">0</span>
+                        </h4>
+                        <div id="negativeDrivers" class="space-y-2">
+                            <!-- Negative drivers will be populated here -->
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-blue-600 mb-3 flex items-center gap-2">
+                            🔧 Modifiers
+                            <span id="modifierCount" class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">0</span>
+                        </h4>
+                        <div id="modifierWords" class="space-y-2">
+                            <!-- Modifier words will be populated here -->
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-gray-600 mb-3 flex items-center gap-2">
+                            📋 Neutral Anchors
+                            <span id="neutralAnchorCount" class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full">0</span>
+                        </h4>
+                        <div id="neutralAnchors" class="space-y-2">
+                            <!-- Neutral anchors will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Highlighted Text -->
+                <div class="border-t border-gray-200 pt-6">
+                    <h4 class="text-lg font-medium text-gray-800 mb-3">📝 Text with Sentiment Highlighting</h4>
+                    <div class="mb-3 flex flex-wrap gap-2 text-sm">
+                        <span class="flex items-center gap-1">
+                            <span class="w-3 h-3 bg-green-200 rounded"></span>
+                            <span class="text-gray-600">Strong Positive</span>
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="w-3 h-3 bg-green-100 rounded"></span>
+                            <span class="text-gray-600">Mild Positive</span>
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="w-3 h-3 bg-red-200 rounded"></span>
+                            <span class="text-gray-600">Strong Negative</span>
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="w-3 h-3 bg-red-100 rounded"></span>
+                            <span class="text-gray-600">Mild Negative</span>
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="w-3 h-3 bg-blue-200 rounded"></span>
+                            <span class="text-gray-600">Modifiers</span>
+                        </span>
+                    </div>
+                    <div id="highlightedText" class="p-4 bg-gray-50 rounded-lg border text-gray-800 leading-relaxed">
+                        <!-- Highlighted text will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sentence Analysis -->
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">📝 Sentence-by-Sentence Analysis</h3>
+                <div id="sentenceAnalysis" class="space-y-3">
+                    <!-- Sentence analysis will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+	<script src="Script.js">	
+	</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97109f44f765740e',t:'MTc1NTUxMTgzNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
