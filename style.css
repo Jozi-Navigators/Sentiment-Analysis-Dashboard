@@ -1,0 +1,55 @@
+ @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+ * {
+     font-family: 'Poppins', sans-serif;
+ }
+
+ .gradient-bg {
+     background: linear-gradient(135deg, #4c63d2 0%, #5a4fcf 100%);
+ }
+
+ .floating {
+     animation: float 6s ease-in-out infinite;
+ }
+
+ @keyframes float {
+
+     0%,
+     100% {
+         transform: translateY(0px);
+     }
+
+     50% {
+         transform: translateY(-20px);
+     }
+ }
+
+ .pulse-glow {
+     animation: pulseGlow 2s ease-in-out infinite alternate;
+ }
+
+ @keyframes pulseGlow {
+     from {
+         box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+     }
+
+     to {
+         box-shadow: 0 0 40px rgba(59, 130, 246, 0.8), 0 0 60px rgba(59, 130, 246, 0.4);
+     }
+ }
+
+ .sentiment-card {
+     backdrop-filter: blur(20px);
+     background: rgba(255, 255, 255, 0.15);
+     border: 1px solid rgba(255, 255, 255, 0.3);
+     transition: all 0.3s ease;
+ }
+
+ .sentiment-card:hover {
+     transform: translateY(-5px);
+     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+ }
+
+ .emoji-bounce {
+     animation: emojiBounce 1s ease-in-out infinite;
+ }
