@@ -53,3 +53,49 @@
  .emoji-bounce {
      animation: emojiBounce 1s ease-in-out infinite;
  }
+
+ @keyframes emojiBounce {
+
+     0%,
+     20%,
+     50%,
+     80%,
+     100% {
+         transform: translateY(0);
+     }
+
+     40% {
+         transform: translateY(-10px);
+     }
+
+     60% {
+         transform: translateY(-5px);
+     }
+ }
+
+ .sparkle {
+     position: relative;
+     overflow: hidden;
+ }
+
+ .sparkle::before {
+     content: '';
+     position: absolute;
+     top: -50%;
+     left: -50%;
+     width: 200%;
+     height: 200%;
+     background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+     transform: rotate(45deg);
+     animation: sparkle 3s linear infinite;
+ }
+
+ @keyframes sparkle {
+     0% {
+         transform: translateX(-100%) translateY(-100%) rotate(45deg);
+     }
+
+     100% {
+         transform: translateX(100%) translateY(100%) rotate(45deg);
+     }
+ }
